@@ -245,14 +245,14 @@ for other PCIe devices as well).
     eval \"$file\" "$@"
     ```
 
-    and try starting the VM again then check the file it creates
-    `/home/dump.txt` to identify if the scripts are failing. You can also change
-    the file those 2 lines output to (Note: The file will be created as root
-    unless you create it yourself as the hooks are run as root). If there are no
-    errors in the scripts then you can check the logs for the VM at `/var/log/
-    libvirt/qemu/<vm-name>.log` (privilege escalation is required to read them).
-    It might also be worth checking the message in the kernel ring buffer by
-    running `dmesg`.
+    in `hooks/default` and try starting the VM again then check the file it
+    creates `/home/dump.txt` to identify if the scripts are failing. You can
+    also change the file those 2 lines output to (Note: The file will be created
+    as root unless you create it yourself as the hooks are run as root). If
+    there  are no errors in the scripts then you can check the logs for the VM
+    at `/var/log/libvirt/qemu/<vm-name>.log` (privilege escalation is required
+    to read them). It might also be worth checking the message in the kernel
+    ring buffer by running `dmesg`.
 
 ## Potential Pitfalls
 
