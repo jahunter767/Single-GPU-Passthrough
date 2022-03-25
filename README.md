@@ -92,7 +92,7 @@ for other PCIe devices as well).
 
 ## Preparations
 
- - Enable IOMMU by adding the following kernel args:
+ 1. Enable IOMMU by adding the following kernel args:
     - For systems with AMD CPUs `amd_iommu=on iommu=pt`
     - For systems with Intel CPUs `intel_iommu=on iommu=pt`
     The exact steps will vary based on your distro.
@@ -100,7 +100,7 @@ for other PCIe devices as well).
     - For Pop_OS run: `kernelstub --add-options "<args here>"`
     You'll likely need to elevate privileges with sudo here.
 
- - Download and run the [Show-System-Hardware.sh](./Show-System-Hardware.sh).
+ 2. Download and run the [Show-System-Hardware.sh](./Show-System-Hardware.sh).
     You might  need to elevate privileges for it to list out the IOMMU groups.
     The main purpose of the script is to give an overview of your system so you
     can identify what hardware you may passthrough. When you run it you should
@@ -155,15 +155,15 @@ for other PCIe devices as well).
     passthrough all the devices in the group so feel free to proceed though
     your mileage may vary.
 
- - Once you've figured out what you can and can't passthrough, install libvirt,
+ 3. Once you've figured out what you can and can't passthrough, install libvirt,
     qemu-kvm, libvirt-daemon-kvm, libvirt-daemon-driver-qemu, virsh and virtual
     machine manager
 
- - Create a normal VM with Virtual Machine Manager and install the relevant
+ 4. Create a normal VM with Virtual Machine Manager and install the relevant
     drivers inside the VM.
     ([Here's a link to virtio drivers for Windows](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso))
 
- - Download the scripts inside the [hooks folder here](./hooks) and copy them
+ 5. Download the scripts inside the [hooks folder here](./hooks) and copy them
     into /etc/libvirt/hooks. These scripts are based on the scripts in other
     guides however I created a default folder containing scripts that define
     functions you can reuse for several VMs as the principle is mostly the same
@@ -171,23 +171,23 @@ for other PCIe devices as well).
     scripts in the `win10` and `win10-gpu` you can use as an example of what
     your configuration will look like.
 
- - Edit the `qemu.conf` file in the `qemu.d` folder to include a variable name
+ 6. Edit the `qemu.conf` file in the `qemu.d` folder to include a variable name
     per device you want to passthrough the list of PCI IDS associated with each
     device in a similar fashion to the devices in the file.
 
- - Create a folder inside the `qemu.d` folder with the same name as your VM
+ 7. Create a folder inside the `qemu.d` folder with the same name as your VM
     then create the folders `prepare`, `prepare/begin/`, `release` and
     `release/end` and the files `vm.conf`, `prepare/begin/start.sh` and
     `release/end/stop.sh`
 
- - Update `vm.conf` in a similar fashion to the examples in the repo
+ 8. Update `vm.conf` in a similar fashion to the examples in the repo
     [here](./hooks/qemu.d/win10/vm.conf) and
     [here](./hooks/qemu.d/win10-gpu/vm.conf).
     This file essentially serves as a configuration file for your VM where you
     can assign more memorable names to specific features you intend to enable
     on the host or hardware you intend to passthrough to the vm etc.
 
- - Add the snippet below to the `start.sh` and `stop.sh` files you made earlier
+ 9. Add the snippet below to the `start.sh` and `stop.sh` files you made earlier
 
     ```
     #! /bin/bash
@@ -226,13 +226,14 @@ for other PCIe devices as well).
     important. For the start script you'll need to call the detach functions
     before loading the VFIO modules. For the stop script, you'll need to unload
     the VFIO modules before the reattach functions. As for the other functions
-    the order isn't as important
+    the order isn't as important.
 
-    At this point the hardware should be passed through successfully if
-    everything was configured properly. There will be a 12+ second delay before
-    any graphical output is displayed so keep that in mind. If the VM fails to
-    start and your host login screen reloads or you system appears to hang on
-    a black screen then you can uncomment these 2 lines (lines 21 and 22)
+    After completing the scripts remember to make start.sh, stop.sh and default
+    executable. At this point the hardware should be passed through successfully
+    if everything was configured properly. There will be a 12+ second delay
+    before any graphical output is displayed so keep that in mind. If the VM
+    fails to start and your host login screen reloads or you system appears to
+    hang on a black screen then you can uncomment these 2 lines (lines 21 and 22)
 
     ```
     #echo "--------------NEXT--------------${file}" >> "/home/dump.txt"
