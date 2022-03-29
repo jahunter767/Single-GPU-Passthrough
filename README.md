@@ -65,11 +65,15 @@ expose a GPU to a VM of your choosing.
 
 In order for the VFIO module to isolate these devices however there are a few
 prerequisites that the devices in the IOMMU group must meet. First, they must
-be resettable and secondly it must be explicitly controlled by the VFIO module.
-Please note however that the module can only isolate whole IOMMU groups and not
-individual devices in a given group so unless you want to passthrough the other
-devices in the group as well, it is recommended that you try to change the PCIe
-slot that your GPU (or other device you want to pass through) is connected to.
+be resettable and secondly they must not be bound to any other kernel modules
+when binding them to the VFIO module. Please note however that the module can
+only isolate whole IOMMU groups and not individual devices in a given group so
+unless you want to passthrough the other devices in the group as well, it is
+recommended that you try to change the PCIe slot that your GPU (or other device
+you want to pass through) is connected to. The exception to this rule however
+are PCI bridge devices which are (unsupported by the vfio-pci module)
+[https://www.kernel.org/doc/html/latest/driver-api/vfio.html#vfio-usage-example]
+and can thus be ignored for our purposes (even if they is not resettable).
 While it is possible to apply the ACS patch to the kernel to work around this
 limitation, it isn't guaranteed to work for your system and requires a lot more
 knowledge to implement and is outside the scope of this guide.
@@ -125,35 +129,33 @@ for other PCIe devices as well).
 
     ![](./imgs/iommu-group(3).png)
 
-    The PCI IDS for each device can be seen on the left of the device name in
-    the form `XX:XX.X`. The entries with `[RESET]` beside them indicate what
-    devices are resettable and are also conveniently coloured green. You can
-    also see what kernel modules control the device and the ones that are
-    actively controling the device. The script also conveniently list any USB
-    devices connected to any USB controllers and any sata drives connected to
-    any sata controllers in the system. These also get coloured green if the
-    USB/SATA controller they're attached to is resettable. Lastly this script
-    also shows what display ports the GPU has and which ones are in use (they
-    also get coloured green if the GPU is resettable). Knowing what ports your
-    GPU has is particularly important for those attempting this on a laptop.
-    If the dGPU in your laptop has no ports then GPU passthrough is unlikely
-    to work for you at this point in time (some people have had some success
-    however the GPU won't be able to run any graphical workloads/provide any
-    graphical output).
+    The code on the left of the device name in the form `XX:XX.X` represents
+    the `bus:device:function` numbers of that device in the current domain.
+    Going forward I'll refer to that code as the domain id of the device. The
+    entries with `[RESET]` beside them indicate what devices are resettable
+    and are also conveniently coloured green. You can also see what kernel
+    modules control the device and the ones that are actively controling the
+    device. The script also conveniently list any USB devices connected to any
+    USB controllers and any sata drives connected to any sata controllers in
+    the system. These also get coloured green if the USB/SATA controller
+    they're attached to is resettable. Lastly this script also shows what
+    display ports the GPU has and which ones are in use (they also get coloured
+    green if the GPU is resettable). Knowing what ports your GPU has is
+    particularly important for those attempting this on a laptop. If the dGPU
+    in your laptop has no ports then GPU passthrough is unlikely to work for
+    you at this point in time (some people have had some success however the
+    GPU won't be able to run any graphical workloads/provide any graphical
+    output).
 
     For this specific example we can see I can passthrough my GPU (group 15)
     without needing to isolate and passthrough any additional devices. Not all
     the other devices are listed as resettable however they are exposed as
     additional functions of the main device (you can tell by the fact that the
-    pci id of the devices are all the same except for the decimal portion
-    ie.the function number (this number goes from 0 to 7)).
-
-    I could also passthrough the USB controller in group 18. Another thing to
-    note when passing through devices is that in some instances you may see a
-    non-resettable PCI bridge device or similar generic device in an IOMMU
-    group. I haven't seen it personally however, it's been said you can still
-    passthrough all the devices in the group so feel free to proceed though
-    your mileage may vary.
+    domain ids of the devices are all the same except for the function number
+    (this number goes from 0 to 7)). I could also passthrough the USB controller
+    in group 18. The devices in group 14 may also be good candidates for
+    passthrough howerver my boot drive is actually attached to the SATA
+    controller.
 
  - Once you've figured out what you can and can't passthrough, install libvirt,
     qemu-kvm, libvirt-daemon-kvm, libvirt-daemon-driver-qemu, virsh and virtual
@@ -172,8 +174,9 @@ for other PCIe devices as well).
     your configuration will look like.
 
  - Edit the `qemu.conf` file in the `qemu.d` folder to include a variable name
-    per device you want to passthrough the list of PCI IDS associated with each
-    device in a similar fashion to the devices in the file.
+    per device you want to passthrough the list of domain ids associated with
+    each device in a similar fashion to the devices in the file (ie. prefixed
+    by `pci_0000_` and with the special characters replaced with underscores).
 
  - Create a folder inside the `qemu.d` folder with the same name as your VM
     then create the folders `prepare`, `prepare/begin/`, `release` and
@@ -230,9 +233,11 @@ for other PCIe devices as well).
 
     At this point the hardware should be passed through successfully if
     everything was configured properly. There will be a 12+ second delay before
-    any graphical output is displayed so keep that in mind. If the VM fails to
-    start and your host login screen reloads or you system appears to hang on
-    a black screen then you can uncomment these 2 lines (lines 21 and 22)
+    any graphical output is displayed so keep that in mind. You can adjust this
+    value if your VM does not start consistently when passing through your GPU.
+    If the VM fails to start and your host login screen reloads or you system
+    appears to hang on a black screen then you can uncomment these 2 lines
+    (lines 21 and 22)
 
     ```
     #echo "--------------NEXT--------------${file}" >> "/home/dump.txt"
@@ -264,16 +269,14 @@ for other PCIe devices as well).
     hardware that require extra drivers to facilitate rebinding them to the
     host OS after stopping the VM
 
- - Updating your BIOS may change the PCI IDS for each device causing the VM to
-    fail to start. Updating the BIOS may also break passthrough support if the
-    BIOS is buggy so it is recommended that you refrain from updating your BIOS
-    unless absolutely necessary
+ - Updating your BIOS may change the domain ids for each device causing the VM
+    to fail to start. Updating the BIOS may also break passthrough support if
+    the BIOS is buggy so it is recommended that you refrain from updating your
+    BIOS unless absolutely necessary
 
  - Most scripts simply unload the kernel modules for the PCI device (eg. a GPU)
-    when unbinding it, however for those with multiple identical PCI devices
-    (eg. two GTX 1050's) or devices that use the same kernel module (eg. two
-    different Nvidia GPU's) in their system interested in dynamically passing
-    through one of them at a time you'll need to modify the scripts to identify
-    the specific device you'll pass through (this is particularly challenging
-    if they are identical type since some of the id's will be identical),
-    then unbind it from the module without completely unloading the module.
+    when unbinding it, however for those with multiple devices that use the
+    same kernel module (eg. two Nvidia GPU's) in their system interested in
+    dynamically passing through one of them at a time you'll need to modify
+    the scripts to unbind the device from the module without completely
+    unloading the module.
