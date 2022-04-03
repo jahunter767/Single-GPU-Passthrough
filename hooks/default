@@ -1,14 +1,14 @@
 #!/bin/bash
-#
-# Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
 
-GUEST_NAME="$1"
-HOOK_NAME="$2"
-STATE_NAME="$3"
+GUEST_NAME="${1}"
+HOOK_NAME="${2}"
+STATE_NAME="${3}"
 MISC="${@:4}"
 
-HOOKPATH="${0}.d/$GUEST_NAME/$HOOK_NAME/$STATE_NAME"
+HOOKPATH="${0}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}"
+TMP_CONFIG_PATH="tmp/libvirt-${GUEST_NAME}"
 
+# Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
 set -e # If a script exits with an error, we should as well.
 
 # check if it's a non-empty executable file
@@ -18,10 +18,95 @@ elif [ -d "$HOOKPATH" ]; then
     while read file; do
         # check for null string
         if [ ! -z "$file" ]; then
-            #echo "--------------NEXT--------------${file}" >> "/home/dump.txt"
-            #eval \"$file\" "$@" &>> "/home/dump.txt"
             eval \"$file\" "$@"
         fi
     done <<< "$(find -L "$HOOKPATH" -maxdepth 1 -type f -executable -print;)"
 fi
 
+echo "mkdir -p ${TMP_CONFIG_PATH}"
+declare -a tag_stack
+declare -i stack_ptr
+stack_ptr=0
+# set -x
+while read xml_line; do
+    # Strip everything from the first closing angle bracket onwards
+    tag_name=${xml_line%%>*}
+    tag_name=${tag_name%/}
+    # Strip args from tag
+    # tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
+    tag_name=${tag_name%% *=\"*\"}
+
+    echo "######################################################################"
+
+    if [[ ${tag_name} =~ "</${tag_stack[$stack_ptr]}" ]]; then
+        # If the tag is a closing tag
+        stack_ptr=$(( ${stack_ptr} - 1 ))
+    else
+        tag_name="${tag_name#*<}"
+
+        tag_path="${TMP_CONFIG_PATH}"
+        for (( i = 1 ; i < ${stack_ptr} + 1 ; i++ )); do
+            tag_path="${tag_path}/${tag_stack[$i]}"
+        done
+        tag_path="${tag_path}/${tag_name}"
+
+        # Matches tags like this <test arg="a1"/>
+        pred1=$(echo "$(echo "${xml_line}" | grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*/>"$)")
+        # Matches lines like this <test>value</test>
+        pred2=$(echo "$(echo ${xml_line} | grep -P $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*>[^ ]*</${tag_name}>"$)")
+        # If the tag isn't closed in the current line, update the tag stack
+        if [[ $pred1 == "" && $pred2 == "" ]]; then
+            # Update tag stack
+            if [[ ${tag_stack[@]: -1} != ${tag_name} ]]; then
+                stack_ptr=$(( ${stack_ptr} + 1 ))
+                tag_stack[${stack_ptr}]="${tag_name}"
+            fi
+        fi
+
+
+
+
+        ######################################################################
+        echo "Tag Name  =${tag_name}"
+        echo "Tag Stack =${tag_stack[@]:0:${stack_ptr}}"
+        echo "Stack Ptr =${stack_ptr}"
+        echo "Tag Path  =${tag_path}"
+        ######################################################################
+
+
+
+        if [ -e ${tag_path} ]; then
+            # If there aren't any subfolders for each repreated tag then we can
+            # assume that the existing folder is the first instance of that tag
+            # so we rename it to reflect that, create a new folder with the tag
+            # name and move it into that
+            tag_lst=$(find ${tag_path}/${tag_name}-* -maxdepth 0 -type d)
+            if [[ ${tag_lst} == "" || ${tag_lst} == "." ]] ; then
+                # mv ${tag_path} "${tag_path}-1"
+                # mkdir -p ${tag_path}
+                # mv "${tag_path}-1" ${tag_path}
+                echo "mv ${tag_path} \"${tag_path}-1\""
+                echo "mkdir -p ${tag_path}"
+                echo "mv \"${tag_path}-1\" ${tag_path}"
+            fi
+            # tag_path="${tag_path}/${tag_name}-$(( ${#tag_lst[@]} + 1 ))"
+            # mkdir -p "${tag_path}"
+            echo "tag_path=\"${tag_path}/${tag_name}-$(( ${#tag_lst[@]} + 1 ))\""
+            echo "mkdir -p \"${tag_path}\""
+        fi
+
+        # Parse for tag args
+        while read arg; do
+            echo "${arg%%=*} equals ${arg##*=\"}"
+        done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[[:word:]]*=\"[^ ]*\")")
+    fi
+done < /dev/stdin
+
+# Extract device domain ids from tmp folder structure
+# hint: search for hostdev/source/address/{domain,bus,device,function} under
+# devices
+
+# Then "steps to better automate passthrough.md"
+
+            #echo "--------------NEXT--------------${file}" >> "/home/dump.txt"
+            #eval \"$file\" "$@" &>> "/home/dump.txt"
