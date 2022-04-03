@@ -7,4 +7,3 @@ function unmount_drives {
         umount "/dev/disk/by-id/${d}-part"*
     done
 } # End-unmount_drives
-

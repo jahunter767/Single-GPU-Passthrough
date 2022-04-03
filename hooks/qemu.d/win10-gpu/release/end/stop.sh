@@ -39,4 +39,3 @@ done
 
 disable_services ${external_zone} ${external_services[*]}
 disable_services ${internal_zone} ${internal_services[*]}
-

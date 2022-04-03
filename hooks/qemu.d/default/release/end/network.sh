@@ -7,4 +7,3 @@ function disable_services {
         firewall-cmd --remove-service=${p} --zone=${zone}
     done
 } # End-disable_services
-

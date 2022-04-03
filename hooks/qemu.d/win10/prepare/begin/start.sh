@@ -39,4 +39,3 @@ unmount_drives ${drives[*]}
 #load_vfio
 
 isolate_cores ${free_cores}
-

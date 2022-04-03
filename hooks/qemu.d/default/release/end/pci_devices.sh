@@ -61,4 +61,3 @@ function reattach_gpu {
     # Start display manager
     systemctl start display-manager.service
 } # End-reattach_gpu
-

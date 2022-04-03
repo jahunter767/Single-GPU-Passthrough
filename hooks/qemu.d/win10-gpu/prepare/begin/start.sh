@@ -39,4 +39,3 @@ detach_usb_ctrls ${usc_ctrls[*]}
 load_vfio
 
 isolate_cores ${free_cores}
-

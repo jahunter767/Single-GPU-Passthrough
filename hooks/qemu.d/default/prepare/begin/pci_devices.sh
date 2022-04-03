@@ -64,4 +64,3 @@ function load_vfio {
         modprobe ${v}
     done
 } # End-load_vfio
-

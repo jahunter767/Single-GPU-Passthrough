@@ -7,4 +7,3 @@ function enable_services {
         firewall-cmd --add-service=${p} --zone=${zone}
     done
 } # End-enable_services
-
