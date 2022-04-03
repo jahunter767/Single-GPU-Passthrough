@@ -41,6 +41,13 @@ to setup my own system for this:
     snippets on that page were used to create the
     [Show-System-Hardware.sh](./Show-System-Hardware.sh) script in this repo
 
+ - [libvirt - Hooks for specific system management](https://libvirt.org/hooks.html) -
+    This was useful in understanding how libvirt runs the scripts and the args
+    it passes to them.
+
+ - [Linux Kernel Docs - VFIO - “Virtual Function I/O”](https://www.kernel.org/doc/html/latest/driver-api/vfio.html) -
+    This resource goes more in depth on how to use the VFIO module
+
 ## Disclaimers
 
  - The scripts in this repository are provided without any sort of warranty or
@@ -71,8 +78,8 @@ only isolate whole IOMMU groups and not individual devices in a given group so
 unless you want to passthrough the other devices in the group as well, it is
 recommended that you try to change the PCIe slot that your GPU (or other device
 you want to pass through) is connected to. The exception to this rule however
-are PCI bridge devices which are (unsupported by the vfio-pci module)
-[https://www.kernel.org/doc/html/latest/driver-api/vfio.html#vfio-usage-example]
+are PCI bridge devices which are
+[unsupported by the vfio-pci module](https://www.kernel.org/doc/html/latest/driver-api/vfio.html#vfio-usage-example)
 and can thus be ignored for our purposes (even if they is not resettable).
 While it is possible to apply the ACS patch to the kernel to work around this
 limitation, it isn't guaranteed to work for your system and requires a lot more
@@ -163,7 +170,9 @@ for other PCIe devices as well).
 
  4. Create a normal VM with Virtual Machine Manager and install the relevant
     drivers inside the VM.
-    ([Here's a link to virtio drivers for Windows](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso))
+    ([Here's a link to virtio drivers for Windows](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso)).
+    When creating the VM set the BIOS to be a UEFI as pci passthrough will not
+    work with a VM running a legacy BIOS.
 
  5. Download the scripts inside the [hooks folder here](./hooks) and copy them
     into /etc/libvirt/hooks. These scripts are based on the scripts in other
@@ -229,10 +238,13 @@ for other PCIe devices as well).
     important. For the start script you'll need to call the detach functions
     before loading the VFIO modules. For the stop script, you'll need to unload
     the VFIO modules before the reattach functions. As for the other functions
-    the order isn't as important.
+    the order isn't as important. After completing the scripts remember to make
+    start.sh, stop.sh and default executable.
 
-    After completing the scripts remember to make start.sh, stop.sh and default
-    executable. At this point the hardware should be passed through successfully
+ 10. Edit the VM configuration to include the pci devices you plan to
+    passthrough
+
+    At this point the hardware should be passed through successfully
     if everything was configured properly. There will be a 12+ second delay
     before any graphical output is displayed so keep that in mind. You can
     adjust this value if your VM does not start consistently when passing
