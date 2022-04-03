@@ -23,7 +23,7 @@ elif [ -d "$HOOKPATH" ]; then
     done <<< "$(find -L "$HOOKPATH" -maxdepth 1 -type f -executable -print;)"
 fi
 
-echo "mkdir -p ${TMP_CONFIG_PATH}"
+mkdir -p "${TMP_CONFIG_PATH}"
 declare -a tag_stack
 declare -i stack_ptr
 stack_ptr=0
@@ -33,11 +33,11 @@ while read xml_line; do
     tag_name=${xml_line%%>*}
     tag_name=${tag_name%/}
     # Strip args from tag
-    # tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
+    #tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
     tag_name=${tag_name%% *=\"*\"}
 
-    echo "######################################################################"
-    echo "${xml_line}"
+    #echo "######################################################################"
+    #echo "${xml_line}"
 
     if [[ ${tag_name} =~ "</${tag_stack[$stack_ptr]}" ]]; then
         # If the tag is a closing tag
@@ -64,48 +64,45 @@ while read xml_line; do
             fi
         fi
 
-
-
-
-        ######################################################################
-        echo "Tag Name  =${tag_name}"
-        echo "Tag Stack =${tag_stack[@]:0:${stack_ptr}}"
-        echo "Stack Ptr =${stack_ptr}"
-        echo "Tag Path  =${tag_path}"
-        ######################################################################
-
-
-
-        if [ -e ${tag_path} ]; then
+        if [ -d ${tag_path} ]; then
             # If there aren't any subfolders for each repreated tag then we can
             # assume that the existing folder is the first instance of that tag
             # so we rename it to reflect that, create a new folder with the tag
             # name and move it into that
-            tag_lst=$(find ${tag_path}/${tag_name}-* -maxdepth 0 -type d)
-            if [[ ${tag_lst} == "" || ${tag_lst} == "." ]] ; then
-                # mv ${tag_path} "${tag_path}-1"
-                # mkdir -p ${tag_path}
-                # mv "${tag_path}-1" ${tag_path}
-                echo "mv ${tag_path} \"${tag_path}-1\""
-                echo "mkdir -p ${tag_path}"
-                echo "mv \"${tag_path}-1\" ${tag_path}"
+            first="${tag_name}-1"
+            if [ ! -e ${tag_path}/${first} ] ; then
+                mv "${tag_path}" "${first}"
+                mkdir -p "${tag_path}"
+                mv "${first}" "${tag_path}"
             fi
-            # tag_path="${tag_path}/${tag_name}-$(( ${#tag_lst[@]} + 1 ))"
-            # mkdir -p "${tag_path}"
-            echo "tag_path=\"${tag_path}/${tag_name}-$(( ${#tag_lst[@]} + 1 ))\""
-            echo "mkdir -p \"${tag_path}\""
+            readarray dir_lst <<< $(find ${tag_path}/${tag_name}-* -maxdepth 0 -type d)
+            tag_path="${tag_path}/${tag_name}-$(( ${#dir_lst[@]} + 1 ))"
         fi
+        mkdir -p "${tag_path}"
+
+        ######################################################################
+        #echo "Tag Name  =${tag_name}"
+        #echo "Tag Stack =${tag_stack[@]:0:${stack_ptr}}"
+        #echo "Stack Ptr =${stack_ptr}"
+        #echo "Tag Path  =${tag_path}"
+        ######################################################################
 
         # Parse for string body between tags
         value="${xml_line#*<${tag_name}*>}"
         value="${value%*</${tag_name}*>}"
-        echo "Value     =${value}"
+        if [[ ${value} != "" ]]; then
+            #echo "Value     =${value}"
+            echo "${value}" > "${tag_path}/value"
+        fi
 
         # Parse for tag args
-        echo "Args:"
+        #echo "Args:"
         while read arg; do
-            val="${arg##*=\"}"
-            echo -e "\t${arg%%=*} = ${val%\"}  [raw: ${arg}]"
+            if [[ ${arg} != "" ]]; then
+                val="${arg##*=\"}"
+                #echo -e "\t${arg%%=*} = ${val%\"}  [raw: ${arg}]"
+                echo "${val%\"}" > "${tag_path}/${arg%%=*}"
+            fi
         done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[^ ]*=\"[^ ]*\")")
     fi
 done < /dev/stdin
