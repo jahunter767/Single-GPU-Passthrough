@@ -37,6 +37,7 @@ while read xml_line; do
     tag_name=${tag_name%% *=\"*\"}
 
     echo "######################################################################"
+    echo "${xml_line}"
 
     if [[ ${tag_name} =~ "</${tag_stack[$stack_ptr]}" ]]; then
         # If the tag is a closing tag
@@ -53,11 +54,11 @@ while read xml_line; do
         # Matches tags like this <test arg="a1"/>
         pred1=$(echo "$(echo "${xml_line}" | grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*/>"$)")
         # Matches lines like this <test>value</test>
-        pred2=$(echo "$(echo ${xml_line} | grep -P $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*>[^ ]*</${tag_name}>"$)")
+        pred2=$(echo "$(echo ${xml_line} | grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*>[^ ]*</${tag_name}>"$)")
         # If the tag isn't closed in the current line, update the tag stack
         if [[ $pred1 == "" && $pred2 == "" ]]; then
             # Update tag stack
-            if [[ ${tag_stack[@]: -1} != ${tag_name} ]]; then
+            if [[ ${tag_stack[${stack_ptr}]} != ${tag_name} ]]; then
                 stack_ptr=$(( ${stack_ptr} + 1 ))
                 tag_stack[${stack_ptr}]="${tag_name}"
             fi
@@ -95,10 +96,17 @@ while read xml_line; do
             echo "mkdir -p \"${tag_path}\""
         fi
 
+        # Parse for string body between tags
+        value="${xml_line#*<${tag_name}*>}"
+        value="${value%*</${tag_name}*>}"
+        echo "Value     =${value}"
+
         # Parse for tag args
+        echo "Args:"
         while read arg; do
-            echo "${arg%%=*} equals ${arg##*=\"}"
-        done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[[:word:]]*=\"[^ ]*\")")
+            val="${arg##*=\"}"
+            echo -e "\t${arg%%=*} = ${val%\"}  [raw: ${arg}]"
+        done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[^ ]*=\"[^ ]*\")")
     fi
 done < /dev/stdin
 
