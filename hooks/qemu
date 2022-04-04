@@ -1,1 +1,227 @@
-default
+#! /bin/bash
+
+# set -x
+
+declare -a drive_list
+declare -a hostdev_list
+free_cores=""
+
+# 1. Reads in all the functions defined in qemu.d/default/<hook_name>/<state_name>/
+#    Most of the functions not defined here or in default that are called here
+#    are likely defined there. If you want to override them, you can redefine
+#    them in a script here qemu.d/<vm_name>/<hook_name>/<state_name>/
+# 2. Parses the XML and creates a temporary file system at /tmp/libvirt-<vm_name>
+#    representing it
+# 3. Reads the flags in the VM description and saves them in $config_flags
+source "./default" "${@}" "<" "/dev/stdin"
+
+##############################################################################
+# Extract device data from tmp folder structure
+##############################################################################
+
+function get_hostdev_list {
+    declare -a temp_list
+    type=${1}
+    getName=${2}
+    dev_path="${TMP_CONFIG_PATH}/domain/devices/${type}"
+    if [ -d "${dev_path}" ]; then
+        if [ -d "${dev_path}/${type}-1" ]; then
+            for host_dev in ${dev_path}/${type}-*; do
+                name="$(${getName} ${host_dev})"
+                if [ -n "${name}" ]; then
+                    temp_list[${#temp_list[@]}]="${name}"
+                fi
+            done
+        else
+            name="$(${getName} ${dev_path})"
+            if [ -n "${name}" ]; then
+                temp_list[${#temp_list[@]}]="${name}"
+            fi
+        fi
+    fi
+
+    echo "${temp_list[@]}"
+} # End-get_hostdev_list
+
+function get_drive_path {
+    host_drive="${1}"
+    if [[ "$(cat ${host_drive}/type.val)" == "block" ]]; then
+        cat ${host_drive}/source/dev.val
+    fi
+} # End-get_drive_path
+
+function get_domain_id {
+    host_dev="${1}"
+    addr="${host_dev}/source/address"
+    domain="$(cat ${addr}/domain.val)"
+    bus="$(cat ${addr}/bus.val)"
+    slot="$(cat ${addr}/slot.val)"
+    func="$(cat ${addr}/function.val)"
+    echo "${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
+} # End-get_domain_id
+
+readarray drive_list <<< "$(get_hostdev_list disk get_drive_path)"
+readarray hostdev_list <<< "$(get_hostdev_list hostdev get_domain_id)"
+
+cpu_path="${TMP_CONFIG_PATH}/domain/cputune/vcpupin"
+if [ -d "${cpu_path}" ]; then
+    if [ -d "${cpu_path}/vcpupin-1" ]; then
+        for host_dev in ${cpu_path}/vcpupin-*; do
+            free_cores="${free_cores},$(cat ${host_dev}/cpuset.val)"
+        done
+    else
+        free_cores="$(cat ${host_dev}/cpuset.val)"
+    fi
+fi
+free_cores="${free_cores#,}"
+
+##############################################################################
+# Check if enough rendering GPU's would remain after passing through hostdevs
+##############################################################################
+
+declare -a renderers
+while read r; do
+    renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
+done <<< "$(find /sys/class/drm/render*/device -maxdepth 0)"
+
+remaining_renderers=${#renderers[@]}
+for r in ${renderers}; do
+    if [[ "${hostdev_list}" =~ ([:space:])*${r}([:space:])* ]]; then
+        remaining_renderers=$(( ${remaining_renderers} - 1 ))
+    fi
+done
+
+if [ ${remaining_renderers} -eq 0 ]; then
+    config_flags[${#config_flags[@]}]="--single-gpu"
+elif [ ${remaining_renderers} -lt 0 ]; then
+    echo "THROW ERROR"
+fi
+
+##############################################################################
+# Run the relevant functions to prep the host for device passthrough
+##############################################################################
+
+function prepare_begin {
+    if [[ "${@}" =~ "--debug" ]]; then
+        set -x
+    fi
+
+    declare -a flags
+    flags=${@}
+    for f in ${flags[@]}; do
+        case $f in
+            --single-gpu)
+                echo "Stopping Display Manager"
+                stop_display_manager
+                echo "Unbinding VTconsoles"
+                unbind_vtconsoles
+                echo "Unbinding EFI-Framebuffer"
+                unbind_efi_framebuffer
+                echo "Sleep"
+            ;;
+            --enable-internal-services)
+                echo "Adding <> services to libvirt firewall zone"
+                enable_services ${internal_zone} ${internal_services[*]}
+            ;;
+            --enable-external-services)
+                echo "Adding <> services to host's current firewall zone"
+                enable_services ${external_zone} ${external_services[*]}
+            ;;
+            --enable-nfs)
+                echo "Exporting the following NFS shares to the VM"
+            ;;
+            --pin-cpu-cores)
+                echo "Pinning CPU cores"
+                isolate_cores
+            ;;
+            --debug)
+                echo "Debugging was enabled"
+            ;;
+            *)
+                echo "Warning: Undefined tag: ${f}"
+            ;;
+        esac
+    done
+
+    if [ ${#drive_list[@]} -gt 0 ]; then
+        echo "Unmounting all mounted partitions for the following drives:"
+        echo "${drive_list[@]}"
+        unmount_drives "${drive_list[@]}"
+    fi
+
+    if [ ${#hostdev_list[@]} -gt 0 ]; then
+        echo "Unbinding the following PCI devices from their drivers:"
+        echo "${hostdev_list[@]}"
+        unbind_pci_devices "${hostdev_list[@]}"
+    fi
+
+    echo "Loading VFIO modules"
+} # End-prepare_begin
+
+function release_end {
+    if [[ "${@}" =~ "--debug" ]]; then
+        set -x
+    fi
+
+    echo "Unloading VFIO modules"
+
+    if [ ${#hostdev_list[@]} -gt 0 ]; then
+        echo "Rebinding the following PCI devices to the host:"
+        echo "${hostdev_list[@]}"
+    fi
+
+    if [ ${#drive_list[@]} -gt 0 ]; then
+        echo "Remounting all mounted partitions for the following drives:"
+        echo "${drive_list[@]}"
+    fi
+
+    declare -a flags
+    flags=${@}
+    for f in ${flags[@]}; do
+        case $f in
+            --single-gpu)
+                echo "Rebinding EFI-Framebuffer"
+                echo "Rebinding VTconsoles"
+                echo "Starting Display Manager"
+            ;;
+            --enable-internal-services)
+                echo "Removing <> services from libvirt firewall zone"
+                disable_services ${internal_zone} ${internal_services[*]}
+            ;;
+            --enable-external-services)
+                echo "Removing <> services from host's current firewall zone"
+                disable_services ${external_zone} ${external_services[*]}
+            ;;
+            --enable-nfs)
+                echo "Unexporting the following NFS shares to the VM"
+            ;;
+            --pin-cpu-cores)
+                echo "Unpinning CPU cores"
+                release_cores
+            ;;
+            --debug)
+                echo "Debugging was enabled"
+            ;;
+            *)
+                echo "Warning: Undefined tag: ${f}"
+            ;;
+        esac
+    done
+
+    rm -r "${TMP_CONFIG_PATH}"
+} # End-release_end
+
+function start_begin     { echo "start_begin:     Pass"; } # End-start_begin
+function started_begin   { echo "started_begin:   Pass"; } # End-started_begin
+function stopped_end     { echo "stopped_end:     Pass"; } # End-stopped_end
+function migrate_begin   { echo "migrate_begin:   Pass"; } # End-migrate_begin
+function restore_begin   { echo "restore_begin:   Pass"; } # End-restore_begin
+function reconnect_begin { echo "reconnect_begin: Pass"; } # End-reconnect_begin
+function attach_begin    { echo "attach_begin:    Pass"; } # End-attach_begin
+
+# Calls the relevant function based on the hook name and VM state
+if command -v "${HOOK_NAME}_${STATE_NAME}"; then
+    echo "--------------NEXT--------------" >> "${0}.d/${GUEST_NAME}/vm.log"
+    echo "$(date) ${0} ${@}" >> "${0}.d/${GUEST_NAME}/vm.log"
+    eval \"${HOOK_NAME}_${STATE_NAME}\" ${config_flags[@]} &>> "${0}.d/${GUEST_NAME}/vm.log"
+fi

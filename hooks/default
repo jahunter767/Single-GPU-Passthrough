@@ -1,117 +1,172 @@
 #!/bin/bash
 
+set -e
+
 GUEST_NAME="${1}"
 HOOK_NAME="${2}"
 STATE_NAME="${3}"
 MISC="${@:4}"
 
+DEFAULT_HOOKPATH="${0}.d/default/${HOOK_NAME}/${STATE_NAME}"
 HOOKPATH="${0}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}"
 TMP_CONFIG_PATH="tmp/libvirt-${GUEST_NAME}"
 
-# Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
-set -e # If a script exits with an error, we should as well.
+declare -a config_flags
 
-# check if it's a non-empty executable file
-if [ -f "$HOOKPATH" ] && [ -s "$HOOKPATH"] && [ -x "$HOOKPATH" ]; then
-    eval \"$HOOKPATH\" "$@"
-elif [ -d "$HOOKPATH" ]; then
-    while read file; do
-        # check for null string
-        if [ ! -z "$file" ]; then
-            eval \"$file\" "$@"
+##############################################################################
+# Read in all the functions needed for the VM. Read from the default path
+# first so users can override functions by redefining them in the unique
+# path for the VM being started
+##############################################################################
+
+function include_functions {
+    hpath=${1}
+
+    # Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
+    # check if it's a non-empty executable file
+    if [ -f "${hpath}" ] && [ -s "${hpath}"] && [ -x "${hpath}" ]; then
+        source "${hpath}" "$@"
+    elif [ -d "${hpath}" ]; then
+        while read file; do
+            # check for null string
+            if [ ! -z "${file}" ]; then
+                source "${file}" "$@"
+            fi
+        done <<< "$(find -L "${hpath}" -maxdepth 1 -type f -executable -print;)"
+    fi
+} # End-include_functions
+
+include_functions "${DEFAULT_HOOKPATH}"
+# include_functions "${HOOKPATH}"
+
+##############################################################################
+# Parse XML and create a file system in tmp representing its structure
+# @TODO: Double check regexps that failed in the script but worked in and
+#        interactive shell
+##############################################################################
+
+function parse_xml {
+    mkdir -p "${TMP_CONFIG_PATH}"
+    mkdir -p "${TMP_CONFIG_PATH}/state"
+    declare -a tag_stack
+    declare -i stack_ptr
+    stack_ptr=0
+    tag_path="${TMP_CONFIG_PATH}"
+    parent_tag_path="${TMP_CONFIG_PATH}"
+    #set -x
+    while read xml_line; do
+    if [ -n "${xml_line}" ]; then
+        #echo "######################################################################"
+        #echo "Line: ${xml_line}"
+
+        # Strip everything from the first closing angle bracket onwards
+        tag_name=${xml_line%%>*}
+        tag_name=${tag_name%/}
+        # Strip args from tag
+        #tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
+        tag_name=${tag_name%% *=\"*\"}
+
+        #echo "Name: ${tag_name}"
+
+        if [[ "${tag_name}" =~ "</${tag_stack[$stack_ptr]}" ]]; then
+            # If the tag is a closing tag
+            parent_tag_path="${parent_tag_path%/${tag_stack[$stack_ptr]}-*}"
+            parent_tag_path="${parent_tag_path%/${tag_stack[$stack_ptr]}}"
+            stack_ptr=$(( ${stack_ptr} - 1 ))
+        elif [[ "${tag_name}" =~ ([<])([^ ])+ ]]; then
+            # If the tag is an opening tag
+            tag_name="${tag_name#*<}"
+
+            # Matches tags like this <test arg="a1"/>
+            read pred1 <<< $(echo "${xml_line}" |
+                grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*/>"$)
+            # Matches lines like this <test>value</test>
+            read pred2 <<< $(echo "${xml_line}" |
+                grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*>[^ ]*</${tag_name}>"$)
+
+            # If the tag isn't closed in the current line, update the tag stack
+            if [[ "${pred1}" == "" && "${pred2}" == "" ]]; then
+                # Update tag stack
+                if [[ "${tag_stack[${stack_ptr}]}" != "${tag_name}" ]]; then
+                    stack_ptr=$(( ${stack_ptr} + 1 ))
+                    tag_stack[${stack_ptr}]="${tag_name}"
+
+                    parent_tag_path="${parent_tag_path}/${tag_stack[$stack_ptr]}"
+                    tag_path="${parent_tag_path}"
+                fi
+            else
+                tag_path="${parent_tag_path}/${tag_name}"
+            fi
+
+            if [ -d "${tag_path}" ]; then
+                # If there aren't any subfolders for each repreated tag then we can
+                # assume that the existing folder is the first instance of that tag
+                # so we rename it to reflect that, create a new folder with the tag
+                # name and move it into that
+                if [ ! -d "${tag_path}/${tag_name}-1" ] ; then
+                    mv "${tag_path}" "${tag_path}-1"
+                    mkdir -p "${tag_path}"
+                    mv "${tag_path}-1" "${tag_path}/"
+                fi
+
+                readarray dir_lst <<< $(find ${tag_path}/${tag_name}-* -maxdepth 0 -type d)
+                tag_path="${tag_path}/${tag_name}-$(( ${#dir_lst[@]} + 1 ))"
+                # If the current parent tag is is the repeated tag then save the
+                # new path so it may be preserved for the nested tags. It will be
+                # reset once the closing parent tag is encountered
+                if [[ ${tag_name} == ${tag_stack[$stack_ptr]} ]]; then
+                    parent_tag_path="${tag_path}"
+                fi
+            fi
+            mkdir -p "${tag_path}"
+
+            ######################################################################
+            #echo "Tag Name  =${tag_name}"
+            #echo "Tag Stack =${tag_stack[@]:0:${stack_ptr}}"
+            #echo "Stack Ptr =${stack_ptr}"
+            #echo "P.Tag Path =${parent_tag_path}"
+            #echo "Tag Path   =${tag_path}"
+            ######################################################################
+
+            # Parse for string body between tags
+            value="${xml_line#*<${tag_name}*>}"
+            value="${value%*</${tag_name}*>}"
+            if [[ "${value}" != "" ]]; then
+                #echo "Value     =${value}"
+                echo "${value}" > "${tag_path}/value"
+            fi
+
+            # Parse for tag args
+            #echo "Args:"
+            while read arg; do
+                if [[ "${arg}" != "" ]]; then
+                    val="${arg##*=\"}"
+                    #echo -e "\t${arg%%=*} = ${val%\"}  [raw: ${arg}]"
+                    echo "${val%\"}" > "${tag_path}/${arg%%=*}.val"
+                fi
+            done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[^ ]*=\"[^ ]*\")")
+        else
+            # The line is the body of a parent tag so append it's value to the
+            # value file in the parent tag folder
+            echo "${xml_line}" >> "${parent_tag_path}/value"
         fi
-    done <<< "$(find -L "$HOOKPATH" -maxdepth 1 -type f -executable -print;)"
+    fi
+    done < /dev/stdin
+} # End-parse_xml
+
+if [[ ${HOOK_NAME} == "prepare" && ${STATE_NAME} == "begin" ]]; then
+    parse_xml
 fi
 
-mkdir -p "${TMP_CONFIG_PATH}"
-declare -a tag_stack
-declare -i stack_ptr
-stack_ptr=0
-# set -x
-while read xml_line; do
-    # Strip everything from the first closing angle bracket onwards
-    tag_name=${xml_line%%>*}
-    tag_name=${tag_name%/}
-    # Strip args from tag
-    #tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
-    tag_name=${tag_name%% *=\"*\"}
+##############################################################################
+# Parse flags in the description
+##############################################################################
 
-    #echo "######################################################################"
-    #echo "${xml_line}"
+if [ -e "${TMP_CONFIG_PATH}/domain/description/value" ]; then
+    read args <<< $(cat "${TMP_CONFIG_PATH}/domain/description/value" |
+        grep -oPm1 "(args\[)([[:space:]]*--[[:word:]-]+)+([[:space:]]*\])")
 
-    if [[ ${tag_name} =~ "</${tag_stack[$stack_ptr]}" ]]; then
-        # If the tag is a closing tag
-        stack_ptr=$(( ${stack_ptr} - 1 ))
-    else
-        tag_name="${tag_name#*<}"
-
-        tag_path="${TMP_CONFIG_PATH}"
-        for (( i = 1 ; i < ${stack_ptr} + 1 ; i++ )); do
-            tag_path="${tag_path}/${tag_stack[$i]}"
-        done
-        tag_path="${tag_path}/${tag_name}"
-
-        # Matches tags like this <test arg="a1"/>
-        pred1=$(echo "$(echo "${xml_line}" | grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*/>"$)")
-        # Matches lines like this <test>value</test>
-        pred2=$(echo "$(echo ${xml_line} | grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*>[^ ]*</${tag_name}>"$)")
-        # If the tag isn't closed in the current line, update the tag stack
-        if [[ $pred1 == "" && $pred2 == "" ]]; then
-            # Update tag stack
-            if [[ ${tag_stack[${stack_ptr}]} != ${tag_name} ]]; then
-                stack_ptr=$(( ${stack_ptr} + 1 ))
-                tag_stack[${stack_ptr}]="${tag_name}"
-            fi
-        fi
-
-        if [ -d ${tag_path} ]; then
-            # If there aren't any subfolders for each repreated tag then we can
-            # assume that the existing folder is the first instance of that tag
-            # so we rename it to reflect that, create a new folder with the tag
-            # name and move it into that
-            first="${tag_name}-1"
-            if [ ! -e ${tag_path}/${first} ] ; then
-                mv "${tag_path}" "${first}"
-                mkdir -p "${tag_path}"
-                mv "${first}" "${tag_path}"
-            fi
-            readarray dir_lst <<< $(find ${tag_path}/${tag_name}-* -maxdepth 0 -type d)
-            tag_path="${tag_path}/${tag_name}-$(( ${#dir_lst[@]} + 1 ))"
-        fi
-        mkdir -p "${tag_path}"
-
-        ######################################################################
-        #echo "Tag Name  =${tag_name}"
-        #echo "Tag Stack =${tag_stack[@]:0:${stack_ptr}}"
-        #echo "Stack Ptr =${stack_ptr}"
-        #echo "Tag Path  =${tag_path}"
-        ######################################################################
-
-        # Parse for string body between tags
-        value="${xml_line#*<${tag_name}*>}"
-        value="${value%*</${tag_name}*>}"
-        if [[ ${value} != "" ]]; then
-            #echo "Value     =${value}"
-            echo "${value}" > "${tag_path}/value"
-        fi
-
-        # Parse for tag args
-        #echo "Args:"
-        while read arg; do
-            if [[ ${arg} != "" ]]; then
-                val="${arg##*=\"}"
-                #echo -e "\t${arg%%=*} = ${val%\"}  [raw: ${arg}]"
-                echo "${val%\"}" > "${tag_path}/${arg%%=*}"
-            fi
-        done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[^ ]*=\"[^ ]*\")")
-    fi
-done < /dev/stdin
-
-# Extract device domain ids from tmp folder structure
-# hint: search for hostdev/source/address/{domain,bus,device,function} under
-# devices
-
-# Then "steps to better automate passthrough.md"
-
-            #echo "--------------NEXT--------------${file}" >> "/home/dump.txt"
-            #eval \"$file\" "$@" &>> "/home/dump.txt"
+    while read a; do
+        config_flags[${#config_flags[@]}]="${a}"
+    done <<< $(echo "${args}" | grep -oP "(--[[:word:]-]+)")
+fi
