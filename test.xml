@@ -1,0 +1,120 @@
+<domain type="kvm">
+  <name>windows-gpu</name>
+  <description>test
+    args[ --pin-cpu-cores --enable-internal-services --enable-external-services --enable-nfs --debug ]
+    &lt;notTag&gt;
+    args[ --flag3 --flag4 ]
+  </description>
+  <metadata>
+    <libosinfo:libosinfo xmlns:libosinfo="http://libosinfo.org/xmlns/libvirt/domain/1.0">
+      <libosinfo:os id="http://microsoft.com/win/10"/>
+    </libosinfo:libosinfo>
+  </metadata>
+  <memory unit="KiB">10485760</memory>
+  <cputune>
+    <vcpupin vcpu="0" cpuset="8"/>
+    <vcpupin vcpu="1" cpuset="9"/>
+    <vcpupin vcpu="2" cpuset="10"/>
+    <vcpupin vcpu="3" cpuset="11"/>
+    <emulatorpin cpuset="6-7"/>
+    <iothreadpin iothread="1" cpuset="6-7"/>
+  </cputune>
+  <os>
+    <type arch="x86_64" machine="pc-q35-5.1">hvm</type>
+    <loader readonly="yes" type="pflash">/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd</loader>
+    <nvram>/var/lib/libvirt/qemu/nvram/windows-gpu_VARS.fd</nvram>
+    <bootmenu enable="yes"/>
+  </os>
+  <devices>
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2"/>
+      <source file="/var/lib/libvirt/images/windows.qcow2"/>
+      <target dev="sda" bus="sata"/>
+      <boot order="2"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="1"/>
+    </disk>
+    <disk type="block" device="disk">
+      <driver name="qemu" type="raw" cache="none" io="native"/>
+      <source dev="/dev/disk/by-id/ata-XXXXXXXXXXX-XXXXXX_XXXXXXXX"/>
+      <target dev="sdb" bus="sata"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="2"/>
+    </disk>
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/mnt/virt/ISOs/Windows/11/2022-03-02/Win11_English_x64v1.iso"/>
+      <target dev="sdc" bus="sata"/>
+      <readonly/>
+      <boot order="3"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="3"/>
+    </disk>
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/mnt/virt/ISOs/Windows/Drivers/virtio-win-0.1.215.iso"/>
+      <target dev="sdd" bus="sata"/>
+      <readonly/>
+      <boot order="4"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="4"/>
+    </disk>
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/mnt/virt/ISOs/Linux/Fedora/35/Fedora-KDE-Live-x86_64-35-1.2.iso"/>
+      <target dev="sde" bus="sata"/>
+      <readonly/>
+      <boot order="1"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="5"/>
+    </disk>
+
+    <controller type="usb" index="0" model="qemu-xhci" ports="15">
+      <address type="pci" domain="0x0000" bus="0x02" slot="0x00" function="0x0"/>
+    </controller>
+    <controller type="sata" index="0">
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x1f" function="0x2"/>
+    </controller>
+    <controller type="pci" index="0" model="pcie-root"/>
+    <controller type="pci" index="1" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="1" port="0x10"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x0" multifunction="on"/>
+    </controller>
+    <controller type="pci" index="2" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="2" port="0x11"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x1"/>
+    </controller>
+
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0x07" slot="0x00" function="0x0"/>
+      </source>
+      <rom bar="on"/>
+      <address type="pci" domain="0x0000" bus="0x03" slot="0x00" function="0x0"/>
+    </hostdev>
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0x07" slot="0x00" function="0x1"/>
+      </source>
+      <rom bar="on"/>
+      <address type="pci" domain="0x0000" bus="0x04" slot="0x00" function="0x0"/>
+    </hostdev>
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0x07" slot="0x00" function="0x2"/>
+      </source>
+      <rom bar="on"/>
+      <address type="pci" domain="0x0000" bus="0x06" slot="0x00" function="0x0"/>
+    </hostdev>
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0x07" slot="0x00" function="0x3"/>
+      </source>
+      <rom bar="on"/>
+      <address type="pci" domain="0x0000" bus="0x07" slot="0x00" function="0x0"/>
+    </hostdev>
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0x08" slot="0x00" function="0x3"/>
+      </source>
+      <address type="pci" domain="0x0000" bus="0x08" slot="0x00" function="0x0"/>
+    </hostdev>
+  </devices>
+</domain>
