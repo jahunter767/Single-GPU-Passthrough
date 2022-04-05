@@ -68,6 +68,7 @@ function bind_vtconsoles {
 } # End-bind_vtconsoles
 
 function start_display_manager {
+    # #TODO: Check the display manager's current state before trying to start it
     # systemctl start "$(cat ${TMP_CONFIG_PATH}/state/display-manager.val).service"
     cat "${TMP_CONFIG_PATH}/state/display-manager.val.service"
 } # End-start_display_manager

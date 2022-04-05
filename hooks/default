@@ -45,17 +45,12 @@ function parse_xml {
 
     while read xml_line; do
     if [ -n "${xml_line}" ]; then
-        #echo "######################################################################"
-        #echo "Line: ${xml_line}"
-
         # Strip everything from the first closing angle bracket onwards
         tag_name=${xml_line%%>*}
         tag_name=${tag_name%/}
         # Strip args from tag
         #tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
         tag_name=${tag_name%% *=\"*\"}
-
-        #echo "Name: ${tag_name}"
 
         if [[ "${tag_name}" =~ "</${tag_stack[$stack_ptr]}" ]]; then
             # If the tag is a closing tag
@@ -109,28 +104,17 @@ function parse_xml {
             fi
             mkdir -p "${tag_path}"
 
-            ######################################################################
-            #echo "Tag Name  =${tag_name}"
-            #echo "Tag Stack =${tag_stack[@]:0:${stack_ptr}}"
-            #echo "Stack Ptr =${stack_ptr}"
-            #echo "P.Tag Path =${parent_tag_path}"
-            #echo "Tag Path   =${tag_path}"
-            ######################################################################
-
             # Parse for string body between tags
             value="${xml_line#*<${tag_name}*>}"
             value="${value%*</${tag_name}*>}"
             if [[ "${value}" != "" ]]; then
-                #echo "Value     =${value}"
                 echo "${value}" > "${tag_path}/value"
             fi
 
             # Parse for tag args
-            #echo "Args:"
             while read arg; do
                 if [[ "${arg}" != "" ]]; then
                     val="${arg##*=\"}"
-                    #echo -e "\t${arg%%=*} = ${val%\"}  [raw: ${arg}]"
                     echo "${val%\"}" > "${tag_path}/${arg%%=*}.val"
                 fi
             done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[^ ]*=\"[^ ]*\")")
