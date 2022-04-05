@@ -1,111 +1,47 @@
 #! /bin/bash
 
 # set -x
+set -e
 
-declare -a drive_list
-declare -a hostdev_list
-free_cores=""
-
-# 1. Reads in all the functions defined in qemu.d/default/<hook_name>/<state_name>/
-#    Most of the functions not defined here or in default that are called here
-#    are likely defined there. If you want to override them, you can redefine
-#    them in a script here qemu.d/<vm_name>/<hook_name>/<state_name>/
-# 2. Parses the XML and creates a temporary file system at /tmp/libvirt-<vm_name>
-#    representing it
-# 3. Reads the flags in the VM description and saves them in $config_flags
+# Reads in all the functions defined in qemu.d/default/<hook_name>/<state_name>/
+# Most of the functions not defined here or in default that are called here
+# are likely defined there. If you want to override them, you can redefine
+# them in a script here qemu.d/<vm_name>/<hook_name>/<state_name>/
 source "./default" "${@}" "<" "/dev/stdin"
-
-##############################################################################
-# Extract device data from tmp folder structure
-##############################################################################
-
-function get_hostdev_list {
-    declare -a temp_list
-    dev_path="${1}"
-    getName="${2}"
-    type="$(basename "${dev_path}")"
-    if [ -d "${dev_path}" ]; then
-        if [ -d "${dev_path}/${type}-1" ]; then
-            for host_dev in ${dev_path}/${type}-*; do
-                name="$(${getName} ${host_dev})"
-                if [ -n "${name}" ]; then
-                    temp_list[${#temp_list[@]}]="${name}"
-                fi
-            done
-        else
-            name="$(${getName} ${dev_path})"
-            if [ -n "${name}" ]; then
-                temp_list[${#temp_list[@]}]="${name}"
-            fi
-        fi
-    fi
-
-    echo "${temp_list[@]}"
-} # End-get_hostdev_list
-
-function get_drive_path {
-    config_dev_path="${1}"
-    if [[ "$(cat "${config_dev_path}/type.val")" == "block" ]]; then
-        cat "${config_dev_path}/source/dev.val"
-    fi
-} # End-get_drive_path
-
-function get_domain_id {
-    config_dev_path="${1}"
-    addr="${config_dev_path}/source/address"
-    domain="$(cat "${addr}/domain.val")"
-    bus="$(cat "${addr}/bus.val")"
-    slot="$(cat "${addr}/slot.val")"
-    func="$(cat "${addr}/function.val")"
-    echo -n "${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
-} # End-get_domain_id
-
-function get_host_thread {
-    config_dev_path="${1}"
-    cat "${config_dev_path}/cpuset.val"
-} # End-get_host_thread
-
-readarray drive_list <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
-readarray hostdev_list <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_domain_id")"
-readarray cpu_thread_list <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
-
-# @TODO: make the string comma separated
-free_cores="${cpu_thread_list[*]}"
-
-##############################################################################
-# Check if enough rendering GPU's would remain after passing through hostdevs
-##############################################################################
-
-declare -a renderers
-while read r; do
-    renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
-done <<< "$(ls -d1 /sys/class/drm/render*/device)"
-
-remaining_renderers=${#renderers[@]}
-for r in ${renderers}; do
-    if [[ "${hostdev_list}" =~ ([:space:])*${r}([:space:])* ]]; then
-        remaining_renderers=$(( ${remaining_renderers} - 1 ))
-    fi
-done
-
-if [ ${remaining_renderers} -eq 0 ]; then
-    config_flags=("--single-gpu" "${config_flags[@]}")
-elif [ ${remaining_renderers} -lt 0 ]; then
-    echo "THROW ERROR"
-fi
 
 ##############################################################################
 # Run the relevant functions to prep the host for device passthrough
 ##############################################################################
 
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     Before a QEMU guest is started, the qemu hook script is called in three
+#     locations; if any location fails, the guest is not started.
+#
+#     The first location, since 0.9.0 , is before libvirt performs any resource
+#     labeling, and the hook can allocate resources not managed by libvirt such
+#     as DRBD or missing bridges. This is called as:
+#-----------------------------------------------------------------------------
 function prepare_begin {
-    if [[ "${@}" =~ "--debug" ]]; then
+    parse_xml
+
+    local desc_val="$(cat "${TMP_CONFIG_PATH}/domain/description/value")"
+    readarray config_flags <<< $(parse_description_args "${desc_val}")
+    echo "${config_flags[@]}" > "${TMP_CONFIG_PATH}/state/args.val"
+
+    local renderer_count=$(renderer_check)
+    if [ ${renderer_count} -eq 0 ]; then
+        config_flags=("--single-gpu" "${config_flags[@]}")
+    elif [ ${renderer_count} -lt 0 ]; then
+        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})"
+    fi
+
+    if [[ "${config_flags[@]}" =~ "--debug" ]]; then
         set -x
     fi
 
-    declare -a flags
-    flags=${@}
-    for f in ${flags[@]}; do
+    for f in ${config_flags[@]}; do
         case $f in
             --single-gpu)
                 echo "Stopping Display Manager"
@@ -140,41 +76,95 @@ function prepare_begin {
         esac
     done
 
-    if [ ${#drive_list[@]} -gt 0 ]; then
+    if [ ${#DRIVE_LIST[@]} -gt 0 ]; then
         echo "Unmounting all mounted partitions for the following drives:"
-        echo "${drive_list[@]}"
-        unmount_drives "${drive_list[@]}"
+        echo "${DRIVE_LIST[@]}"
+        unmount_drives "${DRIVE_LIST[@]}"
     fi
 
-    if [ ${#hostdev_list[@]} -gt 0 ]; then
+    if [ ${#HOSTDEV_LIST[@]} -gt 0 ]; then
         echo "Loading VFIO modules"
         load_vfio
         echo "Unbinding the following PCI devices from their drivers:"
-        echo "${hostdev_list[@]}"
-        unbind_pci_devices "${hostdev_list[@]}"
+        echo "${HOSTDEV_LIST[@]}"
+        unbind_pci_devices "${HOSTDEV_LIST[@]}"
     fi
 } # End-prepare_begin
 
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     The second location, available Since 0.8.0 , occurs after libvirt has
+#     finished labeling all resources, but has not yet started the guest,
+#     called as:
+#-----------------------------------------------------------------------------
+function start_begin     { echo "start_begin:     Pass"; } # End-start_begin
+
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     The third location, 0.9.13 , occurs after the QEMU process has
+#     successfully started up:
+#-----------------------------------------------------------------------------
+function started_begin   { echo "started_begin:   Pass"; } # End-started_begin
+
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     When a QEMU guest is stopped, the qemu hook script is called in two
+#     locations, to match the startup.
+#
+#     First, since 0.8.0 , the hook is called before libvirt restores any labels:
+#-----------------------------------------------------------------------------
+function stopped_end     { echo "stopped_end:     Pass"; } # End-stopped_end
+
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     Then, after libvirt has released all resources, the hook is called again,
+#     since 0.9.0 , to allow any additional resource cleanup:
+#-----------------------------------------------------------------------------
 function release_end {
-    if [[ "${@}" =~ "--debug" ]]; then
+    if [ -z "$(command -v "load_config_data")" ]; then
+        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
+    fi
+
+    load_config_data
+    readarray -t config_flags <<< $(cat "${TMP_CONFIG_PATH}/state/args.val")
+    config_flags=("${config_flags[@]## }")
+
+    if [[ "${config_flags[@]}" =~ "--debug" ]]; then
         set -x
     fi
 
-    echo "Unloading VFIO modules"
-
-    if [ ${#hostdev_list[@]} -gt 0 ]; then
+    if [ ${#HOSTDEV_LIST[@]} -gt 0 ]; then
         echo "Rebinding the following PCI devices to the host:"
-        echo "${hostdev_list[@]}"
+        echo "${HOSTDEV_LIST[@]}"
+        bind_pci_devices "${HOSTDEV_LIST[@]}"
     fi
 
-    if [ ${#drive_list[@]} -gt 0 ]; then
+    echo "Unloading VFIO modules"
+    unload_vfio
+
+    if [ ${#DRIVE_LIST[@]} -gt 0 ]; then
         echo "Remounting all mounted partitions for the following drives:"
-        echo "${drive_list[@]}"
+        echo "${DRIVE_LIST[@]}"
+        remount_drives "${DRIVE_LIST[@]}"
+    fi
+
+    # @TODO: Verify this
+    # This check comes after rebinding all the PCI devices as the rendering
+    # devices only show up when a GPU is bound to it's original driver
+    local renderer_count=$(renderer_check)
+    if [ ${renderer_count} -eq 0 ]; then
+        config_flags=("--single-gpu" "${config_flags[@]}")
+    elif [ ${renderer_count} -lt 0 ]; then
+        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})"
     fi
 
     declare -a flags
     flags=${@}
-    for f in ${flags[@]}; do
+    for f in ${config_flags[@]}; do
         case $f in
             --single-gpu)
                 echo "Rebinding EFI-Framebuffer"
@@ -208,17 +198,61 @@ function release_end {
     rm -r "${TMP_CONFIG_PATH}"
 } # End-release_end
 
-function start_begin     { echo "start_begin:     Pass"; } # End-start_begin
-function started_begin   { echo "started_begin:   Pass"; } # End-started_begin
-function stopped_end     { echo "stopped_end:     Pass"; } # End-stopped_end
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     Since 0.9.11 , the qemu hook script is also called at the beginning of
+#     incoming migration.
+#
+#     The domain XML sent to standard input of the script. In this case, the
+#     script acts as a filter and is supposed to modify the domain XML and
+#     print it out on its standard output. Empty output is identical to copying
+#     the input XML without changing it. In case the script returns failure or
+#     the output XML is not valid, incoming migration will be canceled. This
+#     hook may be used, e.g., to change location of disk images for incoming
+#     domains.
+#-----------------------------------------------------------------------------
 function migrate_begin   { echo "migrate_begin:   Pass"; } # End-migrate_begin
+
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     Since 1.2.9 , the qemu hook script is also called when restoring a saved
+#     image either via the API or automatically when restoring a managed save
+#     machine.
+#
+#     The domain XML sent to standard input of the script. In this case, the
+#     script acts as a filter and is supposed to modify the domain XML and
+#     print it out on its standard output. Empty output is identical to copying
+#     the input XML without changing it. In case the script returns failure or
+#     the output XML is not valid, restore of the image will be aborted. This
+#     hook may be used, e.g., to change location of disk images for restored
+#     domains.
+#-----------------------------------------------------------------------------
 function restore_begin   { echo "restore_begin:   Pass"; } # End-restore_begin
+
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     Since 0.9.13 , the qemu hook script is also called when the libvirtd
+#     daemon restarts and reconnects to previously running QEMU processes.
+#     If the script fails, the existing QEMU process will be killed off.
+#     It is called as:
+#-----------------------------------------------------------------------------
 function reconnect_begin { echo "reconnect_begin: Pass"; } # End-reconnect_begin
+
+#-----------------------------------------------------------------------------
+# Libvirt: Hooks for specific system management
+# https://libvirt.org/hooks.html
+#     Since 0.9.13 , the qemu hook script is also called when the QEMU driver
+#     is told to attach to an externally launched QEMU process.
+#     It is called as:
+#-----------------------------------------------------------------------------
 function attach_begin    { echo "attach_begin:    Pass"; } # End-attach_begin
 
 # Calls the relevant function based on the hook name and VM state
-if command -v "${HOOK_NAME}_${STATE_NAME}"; then
-    echo "--------------NEXT--------------" >> "${0}.d/${GUEST_NAME}/vm.log"
-    echo "$(date) ${0} ${@}" >> "${0}.d/${GUEST_NAME}/vm.log"
-    eval \"${HOOK_NAME}_${STATE_NAME}\" ${config_flags[@]} &>> "${0}.d/${GUEST_NAME}/vm.log"
+if [ -n "$(command -v "${HOOK_NAME}_${STATE_NAME}")" ]; then
+    echo "--------------NEXT--------------" >> "${LOG_FILE}"
+    echo "$(date): ${0} ${@}" >> "${LOG_FILE}"
+    eval \"${HOOK_NAME}_${STATE_NAME}\" &>> "${LOG_FILE}"
 fi

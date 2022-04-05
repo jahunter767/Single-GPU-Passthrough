@@ -1,0 +1,131 @@
+#! /bin/bash
+
+# Declaring global variables
+declare -ga VFIO_KMODS
+declare -ga DRIVE_LIST
+declare -ga HOSTDEV_LIST
+declare -ga CPU_THREAD_LIST
+
+VFIO_KMODS=("vfio" "vfio_iommu_type1" "vfio_pci")
+
+##############################################################################
+# Extract device data from tmp folder structure
+##############################################################################
+
+function get_hostdev_list {
+    declare -a temp_list
+    local dev_path="${1}"
+    local getName="${2}"
+    local type="$(basename "${dev_path}")"
+    if [ -d "${dev_path}" ]; then
+        if [ -d "${dev_path}/${type}-1" ]; then
+            for host_dev in ${dev_path}/${type}-*; do
+                local name="$(${getName} ${host_dev})"
+                if [ -n "${name}" ]; then
+                    temp_list[${#temp_list[@]}]="${name}"
+                fi
+            done
+        else
+            local name="$(${getName} ${dev_path})"
+            if [ -n "${name}" ]; then
+                temp_list[${#temp_list[@]}]="${name}"
+            fi
+        fi
+    # else
+    #     echo "PWD: $(pwd)"
+    #     echo "LS: $(ls $PWD/tmp)"
+    #     echo "TEST: $?"
+    fi
+
+    echo "${temp_list[@]}"
+} # End-get_hostdev_list
+
+function get_drive_path {
+    local config_dev_path="${1}"
+    if [[ "$(cat "${config_dev_path}/type.val")" == "block" ]]; then
+        cat "${config_dev_path}/source/dev.val"
+    fi
+} # End-get_drive_path
+
+function get_domain_id {
+    local config_dev_path="${1}"
+    local addr="${config_dev_path}/source/address"
+    local domain="$(cat "${addr}/domain.val")"
+    local bus="$(cat "${addr}/bus.val")"
+    local slot="$(cat "${addr}/slot.val")"
+    local func="$(cat "${addr}/function.val")"
+    echo -n "${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
+} # End-get_domain_id
+
+function get_host_thread {
+    local config_dev_path="${1}"
+    cat "${config_dev_path}/cpuset.val"
+} # End-get_host_thread
+
+function load_config_data {
+    readarray -t DRIVE_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
+    readarray -t HOSTDEV_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_domain_id")"
+    readarray -t CPU_THREAD_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
+} # End-load_config_data
+
+##############################################################################
+# Functions commonly used across multiple different types of hooks
+##############################################################################
+
+#-----------------------------------------------------------------------------
+# Check if enough rendering GPU's would remain after passing through hostdevs
+# @TODO: Check if this is a reasonable way to do this across various system
+#        configurations
+#-----------------------------------------------------------------------------
+function renderer_check {
+    declare -a renderers
+    while read r; do
+        renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
+    done <<< "$(ls -d1 /sys/class/drm/render*/device)"
+
+    local remaining_renderers=${#renderers[@]}
+    for r in ${renderers}; do
+        if [[ "${HOSTDEV_LIST}" =~ ([:space:])*${r}([:space:])* ]]; then
+            local remaining_renderers=$(( ${remaining_renderers} - 1 ))
+        fi
+    done
+
+    echo ${remaining_renderers}
+} # End-renderer_check
+
+function detach_pci_dev {
+    local device=$(basename "$(realpath "${1}")")
+    local driver_path="/sys/bus/pci/devices/${device}/driver"
+    local driver="$(basename "$(realpath "${driver_path}")")"
+    echo "${driver}" > "${TMP_CONFIG_PATH}/state/${device}-driver.val"
+    #echo "${device}" > "${driver_path}/unbind"
+    echo "${device} > ${driver_path}/unbind"
+} # End-detach_pci_dev
+
+function attach_pci_dev {
+    local device=$(basename "$(realpath "${1}")")
+    local driver="${2}"
+    local dev_path="/sys/bus/pci/devices/${device}"
+    local vendor="$(cat ${dev_path}/vendor)"
+    local device="$(cat ${dev_path}/device)"
+    local dev_id="${vendor#0x}:${device#0x}"
+    #echo "${dev_id}" > "/sys/bus/pci/drivers/${driver}/new_id"
+    echo "${dev_id} > /sys/bus/pci/drivers/${driver}/new_id"
+} # End-attach_pci_dev
+
+function traverse_pci_dev_tree {
+    local curr_node="${1}"
+    local action="${2}"
+    local next_node="${3}"
+    while read n; do
+        if [[ -d "${n}" && -n "$n" ]]; then
+            traverse_pci_dev_tree "$(realpath ${n})" "${action}" "${next_node}"
+        fi
+    done <<< $(ls -d1 ${curr_node}/${next_node}:pci:*:*:*.*/${next_node})
+
+    if [ -n "$(command -v "${action}")" ]; then
+        "${action}" "${curr_node}"
+    else
+        echo "ERROR: PCI ACTION UNDEFINED"
+    fi
+} # End-traverse_pci_dev_tree

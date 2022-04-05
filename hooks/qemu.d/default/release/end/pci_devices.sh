@@ -1,8 +1,13 @@
 #! /bin/bash
 
 function unload_vfio {
-    vfio_kmods=("vfio" "vfio_iommu_type1" "vfio_pci")
-    for v in ${vfio_kmods[*]}; do
+    # @TODO: Check if whether the modules were loaded before starting the VM
+    #        is stored and don't unload the the ones that weren't already loaded
+    #        Might also need to consider checking for other running VM's that
+    #        may currently be using the modules
+    #        Potential file to check:
+    #        ${TMP_CONFIG_PATH}/state/pci_devices/existing_modules.val
+    for v in ${VFIO_KMODS[@]}; do
         # modprobe -r ${v}
         echo ${v}
     done
@@ -11,55 +16,31 @@ function unload_vfio {
 function bind_pci_devices {
     declare -a unbind_stack
 
-    function detach_pci_dev {
-        local d=$(basename "${1}")
-        if [[ ! "${unbind_stack[@]}" =~ ${d} ]]; then
-            local driver_path="/sys/bus/pci/devices/${d}/driver"
-            local curr_module="$(basename "$(realpath "${driver_path}/module")")"
-            if [[ "${curr_module}" =~ (vfio) ]]; then
-                local driver="$(basename "$(realpath "${driver_path}")")"
-                echo "${driver}" > "${TMP_CONFIG_PATH}/state/${d}-driver.val"
-                #echo "${d}" > "/sys/bus/pci/devices/${1}/driver/unbind"
-                echo "${d} > /sys/bus/pci/devices/${1}/driver/unbind"
+    function detach {
+        local device=$(basename "$(realpath "${1}")")
+        local orig_driver="$(cat ${TMP_CONFIG_PATH}/state/${device}-driver.val)"
+        local driver_path="/sys/bus/pci/devices/${device}/driver"
+        local curr_driver="$(basename "$(realpath "${driver_path}")")"
+        if [[ ! "${unbind_stack[@]}" =~ ${device} ]]; then
+            if [[ ! "${curr_driver}" == "${orig_driver}" ]]; then
+                detach_pci_dev "${device}"
             fi
-            unbind_stack=("${d}" "${unbind_stack[@]}")
+            unbind_stack=("${device}" "${unbind_stack[@]}")
         fi
-    } # End-detach_pci_dev
+    } # End-detach
 
-    function attach_pci_dev {
-        local d=$(basename "${1}")
-        local dev_path="/sys/bus/pci/devices/${d}"
-        local vendor="$(cat ${dev_path}/vendor)"
-        local device="$(cat ${dev_path}/device)"
-        local dev_id="${vendor#0x}:${device#0x}"
-        local driver="$(cat ${TMP_CONFIG_PATH}/state/${d}-driver.val)"
-        #echo "${dev_id}" > "/sys/bus/pci/drivers/${driver}/new_id"
-        echo "${dev_id} > /sys/bus/pci/drivers/${driver}/new_id"
-    } # End-attach_pci_dev
-
-    function traverse_pci_dev_tree {
-        local curr_node="${1}"
-        local action="${2}"
-        local next_node="${3}"
-        while read n; do
-            if [[ -d "${n}" && -n "$n" ]]; then
-                traverse_pci_dev_tree "$(realpath ${n})" "${action}" "${next_node}"
-            fi
-        done <<< $(ls -d1 ${curr_node}/${next_node}:pci:*:*:*.*/${next_node})
-
-        if command -v "${action}"; then
-            "${action}" "${curr_node}"
-        else
-            echo "ERROR: PCI ACTION UNDEFINED"
-        fi
-    } # End-traverse_pci_dev_tree
+    function attach {
+        local device=$(basename "$(realpath "${1}")")
+        local driver="$(cat ${TMP_CONFIG_PATH}/state/${device}-driver.val)"
+        attach_pci_dev "${device}" "${driver}"
+    } # End-attach
 
     function unbind {
-        traverse_pci_dev_tree "${1}" "detach_pci_dev" "consumer"
+        traverse_pci_dev_tree "${1}" "detach" "consumer"
     } # End-unbind
 
     #function rebind {
-    #    traverse_pci_dev_tree "${1}" "attach_pci_dev" "supplier"
+    #    traverse_pci_dev_tree "${1}" "attach" "supplier"
     #} # End-rebind
 
     for d in ${@}; do
@@ -68,7 +49,7 @@ function bind_pci_devices {
         fi
     done
     for d in ${unbind_stack[@]}; do
-        attach_pci_dev "${d}"
+        attach "${d}"
     done
 } # End-bind_pci_devices
 

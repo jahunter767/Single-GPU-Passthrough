@@ -1,51 +1,40 @@
 #!/bin/bash
 
-set -e
+# Declaring global variables
+declare -g DOMAIN_NAME
+declare -g GUEST_NAME
+declare -g HOOK_NAME
+declare -g STATE_NAME
+declare -g MISC
+declare -g HOOK_FOLDER
+declare -g TMP_CONFIG_PATH
+declare -g LOG_FILE
 
+DOMAIN_NAME="$(basename "${0}")"
 GUEST_NAME="${1}"
 HOOK_NAME="${2}"
 STATE_NAME="${3}"
 MISC="${@:4}"
 
-DEFAULT_HOOKPATH="${0}.d/default/${HOOK_NAME}/${STATE_NAME}"
-HOOKPATH="${0}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}"
+HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
 TMP_CONFIG_PATH="tmp/libvirt-${GUEST_NAME}"
-
-declare -a config_flags
-
-##############################################################################
-# Read in all the functions needed for the VM. Read from the default path
-# first so users can override functions by redefining them in the unique
-# path for the VM being started
-##############################################################################
-
-function include_functions {
-    hpath=${1}
-
-    # Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
-    # check if it's a non-empty executable file
-    if [ -f "${hpath}" ] && [ -s "${hpath}"] && [ -x "${hpath}" ]; then
-        source "${hpath}" "$@"
-    elif [ -d "${hpath}" ]; then
-        while read file; do
-            # check for null string
-            if [ ! -z "${file}" ]; then
-                source "${file}" "$@"
-            fi
-        done <<< "$(find -L "${hpath}" -maxdepth 1 -type f -executable -print;)"
-    fi
-} # End-include_functions
-
-include_functions "${DEFAULT_HOOKPATH}"
-# include_functions "${HOOKPATH}"
+LOG_FILE="${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/vm.log"
 
 ##############################################################################
-# Parse XML and create a file system in tmp representing its structure
+# Parse XML and create a file system in tmp representing its structure then
+# loads the data into the relevant variables using the load_config_data function
+# implemented in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}
+#
 # @TODO: Double check regexps that failed in the script but worked in and
 #        interactive shell
+#        Improve the speed that the XML is parsed
 ##############################################################################
 
 function parse_xml {
+    if [ -z "$(command -v "load_config_data")" ]; then
+        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
+    fi
+
     mkdir -p "${TMP_CONFIG_PATH}"
     mkdir -p "${TMP_CONFIG_PATH}/state"
     declare -a tag_stack
@@ -152,21 +141,44 @@ function parse_xml {
         fi
     fi
     done < /dev/stdin
+
+    load_config_data
 } # End-parse_xml
 
-if [[ ${HOOK_NAME} == "prepare" && ${STATE_NAME} == "begin" ]]; then
-    parse_xml
-fi
-
-##############################################################################
-# Parse flags in the description
-##############################################################################
-
-if [ -e "${TMP_CONFIG_PATH}/domain/description/value" ]; then
-    read args <<< $(cat "${TMP_CONFIG_PATH}/domain/description/value" |
+function parse_description_args {
+    local desc="${1}"
+    read args <<< $(echo "${desc}" |
         grep -oPm1 "(args\[)([[:space:]]*--[[:word:]-]+)+([[:space:]]*\])")
+    echo "${args}" | grep -oP "(--[[:word:]-]+)"
+} # End-parse_description_args
 
-    while read a; do
-        config_flags[${#config_flags[@]}]="${a}"
-    done <<< $(echo "${args}" | grep -oP "(--[[:word:]-]+)")
-fi
+##############################################################################
+# Read in all the functions needed for the VM. Reads in the default scripts
+# first so users can override functions by redefining them in the unique
+# path for the VM being started.
+# Order scripts are read:
+#     1. ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}
+#     2. ${HOOK_FOLDER}/${DOMAIN_NAME}.d/default/${HOOK_NAME}/${STATE_NAME}
+#     3. ${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}
+##############################################################################
+
+function include_functions {
+    hpath="${1}"
+
+    # Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
+    # check if it's a non-empty executable file
+    if [ -f "${hpath}" ] && [ -s "${hpath}" ] && [ -x "${hpath}" ]; then
+        source "${hpath}" "$@"
+    elif [ -d "${hpath}" ]; then
+        while read file; do
+            # check for null string
+            if [ ! -z "${file}" ]; then
+                source "${file}" "$@"
+            fi
+        done <<< "$(find -L "${hpath}" -maxdepth 1 -type f -executable -print;)"
+    fi
+} # End-include_functions
+
+include_functions "${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
+include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/default/${HOOK_NAME}/${STATE_NAME}"
+include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}"
