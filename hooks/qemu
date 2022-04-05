@@ -21,9 +21,9 @@ source "./default" "${@}" "<" "/dev/stdin"
 
 function get_hostdev_list {
     declare -a temp_list
-    type=${1}
-    getName=${2}
-    dev_path="${TMP_CONFIG_PATH}/domain/devices/${type}"
+    dev_path="${1}"
+    getName="${2}"
+    type="$(basename "${dev_path}")"
     if [ -d "${dev_path}" ]; then
         if [ -d "${dev_path}/${type}-1" ]; then
             for host_dev in ${dev_path}/${type}-*; do
@@ -44,36 +44,33 @@ function get_hostdev_list {
 } # End-get_hostdev_list
 
 function get_drive_path {
-    host_drive="${1}"
-    if [[ "$(cat ${host_drive}/type.val)" == "block" ]]; then
-        cat ${host_drive}/source/dev.val
+    config_dev_path="${1}"
+    if [[ "$(cat "${config_dev_path}/type.val")" == "block" ]]; then
+        cat "${config_dev_path}/source/dev.val"
     fi
 } # End-get_drive_path
 
 function get_domain_id {
-    host_dev="${1}"
-    addr="${host_dev}/source/address"
-    domain="$(cat ${addr}/domain.val)"
-    bus="$(cat ${addr}/bus.val)"
-    slot="$(cat ${addr}/slot.val)"
-    func="$(cat ${addr}/function.val)"
-    echo "${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
+    config_dev_path="${1}"
+    addr="${config_dev_path}/source/address"
+    domain="$(cat "${addr}/domain.val")"
+    bus="$(cat "${addr}/bus.val")"
+    slot="$(cat "${addr}/slot.val")"
+    func="$(cat "${addr}/function.val")"
+    echo -n "${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
 } # End-get_domain_id
 
-readarray drive_list <<< "$(get_hostdev_list disk get_drive_path)"
-readarray hostdev_list <<< "$(get_hostdev_list hostdev get_domain_id)"
+function get_host_thread {
+    config_dev_path="${1}"
+    cat "${config_dev_path}/cpuset.val"
+} # End-get_host_thread
 
-cpu_path="${TMP_CONFIG_PATH}/domain/cputune/vcpupin"
-if [ -d "${cpu_path}" ]; then
-    if [ -d "${cpu_path}/vcpupin-1" ]; then
-        for host_dev in ${cpu_path}/vcpupin-*; do
-            free_cores="${free_cores},$(cat ${host_dev}/cpuset.val)"
-        done
-    else
-        free_cores="$(cat ${host_dev}/cpuset.val)"
-    fi
-fi
-free_cores="${free_cores#,}"
+readarray drive_list <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
+readarray hostdev_list <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_domain_id")"
+readarray cpu_thread_list <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
+
+# @TODO: make the string comma separated
+free_cores="${cpu_thread_list[*]}"
 
 ##############################################################################
 # Check if enough rendering GPU's would remain after passing through hostdevs
@@ -82,7 +79,7 @@ free_cores="${free_cores#,}"
 declare -a renderers
 while read r; do
     renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
-done <<< "$(find /sys/class/drm/render*/device -maxdepth 0)"
+done <<< "$(ls -d1 /sys/class/drm/render*/device)"
 
 remaining_renderers=${#renderers[@]}
 for r in ${renderers}; do
@@ -92,7 +89,7 @@ for r in ${renderers}; do
 done
 
 if [ ${remaining_renderers} -eq 0 ]; then
-    config_flags[${#config_flags[@]}]="--single-gpu"
+    config_flags=("--single-gpu" "${config_flags[@]}")
 elif [ ${remaining_renderers} -lt 0 ]; then
     echo "THROW ERROR"
 fi
@@ -120,11 +117,11 @@ function prepare_begin {
                 echo "Sleep"
             ;;
             --enable-internal-services)
-                echo "Adding <> services to libvirt firewall zone"
+                echo "Adding ${internal_services[*]} services to ${internal_zone} firewall zone"
                 enable_services ${internal_zone} ${internal_services[*]}
             ;;
             --enable-external-services)
-                echo "Adding <> services to host's current firewall zone"
+                echo "Adding ${external_services[*]} services to ${external_zone} firewall zone"
                 enable_services ${external_zone} ${external_services[*]}
             ;;
             --enable-nfs)
@@ -150,12 +147,12 @@ function prepare_begin {
     fi
 
     if [ ${#hostdev_list[@]} -gt 0 ]; then
+        echo "Loading VFIO modules"
+        load_vfio
         echo "Unbinding the following PCI devices from their drivers:"
         echo "${hostdev_list[@]}"
         unbind_pci_devices "${hostdev_list[@]}"
     fi
-
-    echo "Loading VFIO modules"
 } # End-prepare_begin
 
 function release_end {
@@ -185,11 +182,11 @@ function release_end {
                 echo "Starting Display Manager"
             ;;
             --enable-internal-services)
-                echo "Removing <> services from libvirt firewall zone"
+                echo "Removing ${internal_services[*]} services from ${internal_zone} firewall zone"
                 disable_services ${internal_zone} ${internal_services[*]}
             ;;
             --enable-external-services)
-                echo "Removing <> services from host's current firewall zone"
+                echo "Removing ${external_services[*]} services from ${external_zone} firewall zone"
                 disable_services ${external_zone} ${external_services[*]}
             ;;
             --enable-nfs)

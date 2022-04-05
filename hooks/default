@@ -53,7 +53,7 @@ function parse_xml {
     stack_ptr=0
     tag_path="${TMP_CONFIG_PATH}"
     parent_tag_path="${TMP_CONFIG_PATH}"
-    #set -x
+
     while read xml_line; do
     if [ -n "${xml_line}" ]; then
         #echo "######################################################################"
@@ -109,7 +109,7 @@ function parse_xml {
                     mv "${tag_path}-1" "${tag_path}/"
                 fi
 
-                readarray dir_lst <<< $(find ${tag_path}/${tag_name}-* -maxdepth 0 -type d)
+                readarray dir_lst <<< $(ls -d1 ${tag_path}/${tag_name}-*)
                 tag_path="${tag_path}/${tag_name}-$(( ${#dir_lst[@]} + 1 ))"
                 # If the current parent tag is is the repeated tag then save the
                 # new path so it may be preserved for the nested tags. It will be
