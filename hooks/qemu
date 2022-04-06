@@ -7,7 +7,7 @@ set -e
 # Most of the functions not defined here or in default that are called here
 # are likely defined there. If you want to override them, you can redefine
 # them in a script here qemu.d/<vm_name>/<hook_name>/<state_name>/
-source "./default" "${@}" "<" "/dev/stdin"
+source "${0%/daemon}/default" "${@}" "<" "/dev/stdin"
 
 ##############################################################################
 # Run the relevant functions to prep the host for device passthrough
@@ -78,13 +78,13 @@ function prepare_begin {
         esac
     done
 
-    if [ ${#DRIVE_LIST[@]} -gt 0 ]; then
+    if [[ ${#DRIVE_LIST[@]} -gt 0 && -n "${DRIVE_LIST[@]}" ]]; then
         echo "Unmounting all mounted partitions for the following drives:"
         echo "${DRIVE_LIST[@]}"
         unmount_drives "${DRIVE_LIST[@]}"
     fi
 
-    if [ ${#HOSTDEV_LIST[@]} -gt 0 ]; then
+    if [[ ${#HOSTDEV_LIST[@]} -gt 0 && -n "${HOSTDEV_LIST[@]}" ]]; then
         echo "Loading VFIO modules"
         load_vfio
         echo "Unbinding the following PCI devices from their drivers:"
@@ -140,16 +140,15 @@ function release_end {
         set -x
     fi
 
-    if [ ${#HOSTDEV_LIST[@]} -gt 0 ]; then
+    if [[ ${#HOSTDEV_LIST[@]} -gt 0 && -n "${HOSTDEV_LIST[@]}" ]]; then
         echo "Rebinding the following PCI devices to the host:"
         echo "${HOSTDEV_LIST[@]}"
         bind_pci_devices "${HOSTDEV_LIST[@]}"
+        echo "Unloading VFIO modules"
+        unload_vfio
     fi
 
-    echo "Unloading VFIO modules"
-    unload_vfio
-
-    if [ ${#DRIVE_LIST[@]} -gt 0 ]; then
+    if [[ ${#DRIVE_LIST[@]} -gt 0 && -n "${DRIVE_LIST[@]}" ]]; then
         echo "Remounting all mounted partitions for the following drives:"
         echo "${DRIVE_LIST[@]}"
         remount_drives "${DRIVE_LIST[@]}"
@@ -200,7 +199,9 @@ function release_end {
         esac
     done
 
-    rm -r "${TMP_CONFIG_PATH}"
+    if [ -d "${TMP_CONFIG_PATH}" ]; then
+        rm -r "${TMP_CONFIG_PATH}"
+    fi
 } # End-release_end
 
 #-----------------------------------------------------------------------------

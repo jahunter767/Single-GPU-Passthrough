@@ -7,4 +7,4 @@ set -e
 # Most of the functions not defined here or in default that are called here
 # are likely defined there. If you want to override them, you can redefine
 # them in a script here qemu.d/<vm_name>/<hook_name>/<state_name>/
-source "./default" "${@}" "<" "/dev/stdin"
+source "${0%/daemon}/default" "${@}" "<" "/dev/stdin"

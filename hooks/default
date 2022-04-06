@@ -17,8 +17,14 @@ STATE_NAME="${3}"
 MISC="${@:4}"
 
 HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
+# TMP_CONFIG_PATH="/tmp/libvirt-${GUEST_NAME}"
 TMP_CONFIG_PATH="tmp/libvirt-${GUEST_NAME}"
-LOG_FILE="${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/vm.log"
+# HOOK_LOG_PATH="/var/log/libvirt/hooks"
+HOOK_LOG_PATH="${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}"
+# LOG_FILE="${HOOK_LOG_PATH}/${GUEST_NAME}.log"
+LOG_FILE="${HOOK_LOG_PATH}/vm.log"
+
+mkdir -p "${HOOK_LOG_PATH}"
 
 #-----------------------------------------------------------------------------
 # Parse XML and create a file system in tmp representing its structure then
@@ -33,6 +39,9 @@ function parse_xml {
         exit 2
     fi
 
+    if [ -d "${TMP_CONFIG_PATH}" ]; then
+        rm -r "${TMP_CONFIG_PATH}"
+    fi
     mkdir -p "${TMP_CONFIG_PATH}"
     mkdir -p "${TMP_CONFIG_PATH}/state"
 
@@ -42,7 +51,7 @@ function parse_xml {
 
     local tag_name_regex="([^[:space:]\<\>/])+"
     local body_regex="[^\<\>]*"
-    local tag_arg_regex="${tag_name_regex}=\"[^\<\>\"]*\""
+    local tag_arg_regex="${tag_name_regex}=[\"\'][^\<\>\"']*[\"\']"
     local tag_arg_lst_regex="(([[:space:]])*${tag_arg_regex})*"
 
     while read xml_line; do
@@ -59,14 +68,9 @@ function parse_xml {
         # Matches tags like this <test arg="a1"/>
         local self_closing_tag_regex="<${tag_name}${tag_arg_lst_regex}/>"
 
-        # echo "${xml_line}" | grep -P "${open_tag_regex}"
-        # echo "${xml_line}" | grep -P "${close_tag_regex}"
-        # echo "${xml_line}" | grep -P "${one_line_tag_regex}"
-        # echo "${xml_line}" | grep -P "${self_closing_tag_regex}"
-
         # Updates the tag stack and current and parent tag paths
-        if [[ "${xml_line}" =~ ${self_closing_tag_regex} ||
-                "${xml_line}" =~ ${one_line_tag_regex} ]]; then
+        if [[ "${xml_line}" =~ ${self_closing_tag_regex}|${one_line_tag_regex} ]]
+        then
             local tag_path="${parent_tag_path}/${tag_name}"
 
         elif [[ "${xml_line}" =~ ${close_tag_regex} ]]; then
@@ -132,8 +136,8 @@ function parse_xml {
         read open_tag <<< $(echo "${xml_line}" | grep -oP "<${tag_name}${tag_arg_lst_regex}[/]?>")
         while read arg; do
             if [[ -n "${arg}" ]]; then
-                local val="${arg##*=\"}"
-                echo "${val%\"}" > "${tag_path}/${arg%%=*}.val"
+                local val="${arg##*=[\"\']}"
+                echo "${val%[\"\']}" > "${tag_path}/${arg%%=*}.val"
             fi
         done <<< $(echo ${open_tag} | grep -oP "${tag_arg_regex}")
     done < /dev/stdin
@@ -159,7 +163,7 @@ function parse_description_args {
 ##############################################################################
 
 function include_functions {
-    hpath="${1}"
+    local hpath="${1}"
 
     # Author: Sebastiaan Meijer (sebastiaan@passthroughpo.st)
     # check if it's a non-empty executable file

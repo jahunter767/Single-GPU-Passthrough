@@ -60,7 +60,7 @@ function unbind_pci_devices {
     #} # End-rebind
 
     for d in ${@}; do
-        if [[ ! "${unbind_stack[@]}" =~ ${d} ]]; then
+        if [[ -n "${d}" && (! "${unbind_stack[@]}" =~ ${d}) ]]; then
             unbind "/sys/bus/pci/devices/${d}"
         fi
     done

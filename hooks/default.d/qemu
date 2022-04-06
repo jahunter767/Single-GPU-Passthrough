@@ -31,10 +31,6 @@ function get_hostdev_list {
                 temp_list[${#temp_list[@]}]="${name}"
             fi
         fi
-    # else
-    #     echo "PWD: $(pwd)"
-    #     echo "LS: $(ls $PWD/tmp)"
-    #     echo "TEST: $?"
     fi
 
     echo "${temp_list[@]}"
@@ -66,6 +62,11 @@ function load_config_data {
     readarray -t DRIVE_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
     readarray -t HOSTDEV_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_domain_id")"
     readarray -t CPU_THREAD_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
+
+    # Prints out the data in each array
+    declare -p DRIVE_LIST
+    declare -p HOSTDEV_LIST
+    declare -p CPU_THREAD_LIST
 } # End-load_config_data
 
 ##############################################################################
@@ -92,6 +93,10 @@ function renderer_check {
 
     echo ${remaining_renderers}
 } # End-renderer_check
+
+# @TODO: Add functions to detect and mount/unmount nvme partitions or other
+#        devices attached to it
+
 
 function detach_pci_dev {
     local device=$(basename "$(realpath "${1}")")
