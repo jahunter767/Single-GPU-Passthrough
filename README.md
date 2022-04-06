@@ -55,6 +55,12 @@ to setup my own system for this:
  - [Linux Kernel Docs - VFIO - “Virtual Function I/O”](https://www.kernel.org/doc/html/latest/driver-api/vfio.html) -
     This resource goes more in depth on how to use the VFIO module
 
+ - [mateussouzaweb's guide - KVM / QEMU Virtualization Guide”](https://github.com/mateussouzaweb/kvm-qemu-virtualization-guide) -
+    This guide inspired the changes I made to my original hooks to make them
+    more dynamic. The idea to add custom flags in the description of the XML
+    to allow changing the scripts run without needing to edit the scripts
+    directly was from his scripts.
+
 ## Disclaimers
 
  - The scripts in this repository are provided without any sort of warranty or
