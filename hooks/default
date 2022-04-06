@@ -20,110 +20,114 @@ HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
 TMP_CONFIG_PATH="tmp/libvirt-${GUEST_NAME}"
 LOG_FILE="${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/vm.log"
 
-##############################################################################
+#-----------------------------------------------------------------------------
 # Parse XML and create a file system in tmp representing its structure then
 # loads the data into the relevant variables using the load_config_data function
 # implemented in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}
 #
-# @TODO: Double check regexps that failed in the script but worked in and
-#        interactive shell
+# @TODO: Fix regexps
 #        Improve the speed that the XML is parsed
-##############################################################################
-
+#-----------------------------------------------------------------------------
 function parse_xml {
     if [ -z "$(command -v "load_config_data")" ]; then
-        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
+        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" 1>&2
+        exit 2
     fi
 
     mkdir -p "${TMP_CONFIG_PATH}"
     mkdir -p "${TMP_CONFIG_PATH}/state"
+
     declare -a tag_stack
-    declare -i stack_ptr
-    stack_ptr=0
-    tag_path="${TMP_CONFIG_PATH}"
-    parent_tag_path="${TMP_CONFIG_PATH}"
+    local tag_path="${TMP_CONFIG_PATH}"
+    local parent_tag_path="${TMP_CONFIG_PATH}"
+
+    local tag_name_regex="([^[:space:]\<\>/])+"
+    local tag_arg_regex="${tag_name_regex}=\"*\""
+    local tag_arg_lst_regex="(([:space:])*${tag_arg_regex})*"
 
     while read xml_line; do
-    if [ -n "${xml_line}" ]; then
-        # Strip everything from the first closing angle bracket onwards
-        tag_name=${xml_line%%>*}
-        tag_name=${tag_name%/}
-        # Strip args from tag
-        #tag_name=${tag_name%%*( *=\"*\")*(/)+(>)*}
-        tag_name=${tag_name%% *=\"*\"}
+        # Gets the first tag name in the line (ignoring any other possible tag
+        # names)
+        read tag_name <<< $(echo "${xml_line}" | grep -oP "<${tag_name_regex}")
+        local tag_name=${tag_name#\<}
 
-        if [[ "${tag_name}" =~ "</${tag_stack[$stack_ptr]}" ]]; then
-            # If the tag is a closing tag
-            parent_tag_path="${parent_tag_path%/${tag_stack[$stack_ptr]}-*}"
-            parent_tag_path="${parent_tag_path%/${tag_stack[$stack_ptr]}}"
-            stack_ptr=$(( ${stack_ptr} - 1 ))
-        elif [[ "${tag_name}" =~ ([<])([^ ])+ ]]; then
-            # If the tag is an opening tag
-            tag_name="${tag_name#*<}"
+        local open_tag_regex="<${tag_name}${tag_arg_lst_regex}>"
+        local close_tag_regex="</${tag_name}>"
+        # Matches lines like this <test arg="a1">value</test>
+        local one_line_tag_regex="${open_tag_regex}*${close_tag_regex}"
+        # Matches tags like this <test arg="a1"/>
+        local self_closing_tag_regex="<${tag_name}${tag_arg_lst_regex}/>"
 
-            # Matches tags like this <test arg="a1"/>
-            read pred1 <<< $(echo "${xml_line}" |
-                grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*/>"$)
-            # Matches lines like this <test>value</test>
-            read pred2 <<< $(echo "${xml_line}" |
-                grep -Pm1 $"<${tag_name}([[:space:]]*[[:word:]]*=\"[^ ]*\")*>[^ ]*</${tag_name}>"$)
+        # Updates the tag stack and current and parent tag paths
+        if [[ "${xml_line}" =~ ${self_closing_tag_regex} ||
+                "${xml_line}" =~ ${one_line_tag_regex} ]]; then
+            local tag_path="${parent_tag_path}/${tag_name}"
 
-            # If the tag isn't closed in the current line, update the tag stack
-            if [[ "${pred1}" == "" && "${pred2}" == "" ]]; then
-                # Update tag stack
-                if [[ "${tag_stack[${stack_ptr}]}" != "${tag_name}" ]]; then
-                    stack_ptr=$(( ${stack_ptr} + 1 ))
-                    tag_stack[${stack_ptr}]="${tag_name}"
-
-                    parent_tag_path="${parent_tag_path}/${tag_stack[$stack_ptr]}"
-                    tag_path="${parent_tag_path}"
-                fi
+        elif [[ "${xml_line}" =~ ${close_tag_regex} ]]; then
+            if [ ${#tag_stack[@]} -gt 0 ]; then
+                parent_tag_path="${parent_tag_path%/${tag_stack[-1]}-*}"
+                parent_tag_path="${parent_tag_path%/${tag_stack[-1]}}"
+                unset tag_stack[-1]
+                local close_tag_regex="</${tag_stack[-1]}>"
             else
-                tag_path="${parent_tag_path}/${tag_name}"
+                echo "ERROR: Unexpected closing tag found: ${xml_line}" 1>&2
+                exit 2
             fi
 
-            if [ -d "${tag_path}" ]; then
-                # If there aren't any subfolders for each repreated tag then we can
-                # assume that the existing folder is the first instance of that tag
-                # so we rename it to reflect that, create a new folder with the tag
-                # name and move it into that
-                if [ ! -d "${tag_path}/${tag_name}-1" ] ; then
-                    mv "${tag_path}" "${tag_path}-1"
-                    mkdir -p "${tag_path}"
-                    mv "${tag_path}-1" "${tag_path}/"
-                fi
+        elif [[ "${xml_line}" =~ ${open_tag_regex} ]]; then
+            tag_stack[${#tag_stack[@]}]="${tag_name}"
+            local close_tag_regex="</${tag_stack[-1]}>"
+            local parent_tag_path="${parent_tag_path}/${tag_stack[-1]}"
+            local tag_path="${parent_tag_path}"
 
-                readarray dir_lst <<< $(ls -d1 ${tag_path}/${tag_name}-*)
-                tag_path="${tag_path}/${tag_name}-$(( ${#dir_lst[@]} + 1 ))"
-                # If the current parent tag is is the repeated tag then save the
-                # new path so it may be preserved for the nested tags. It will be
-                # reset once the closing parent tag is encountered
-                if [[ ${tag_name} == ${tag_stack[$stack_ptr]} ]]; then
-                    parent_tag_path="${tag_path}"
-                fi
-            fi
-            mkdir -p "${tag_path}"
-
-            # Parse for string body between tags
-            value="${xml_line#*<${tag_name}*>}"
-            value="${value%*</${tag_name}*>}"
-            if [[ "${value}" != "" ]]; then
-                echo "${value}" > "${tag_path}/value"
-            fi
-
-            # Parse for tag args
-            while read arg; do
-                if [[ "${arg}" != "" ]]; then
-                    val="${arg##*=\"}"
-                    echo "${val%\"}" > "${tag_path}/${arg%%=*}.val"
-                fi
-            done <<< $(echo ${xml_line} | grep -oP "([[:space:]]*[^ ]*=\"[^ ]*\")")
-        else
-            # The line is the body of a parent tag so append it's value to the
-            # value file in the parent tag folder
-            echo "${xml_line}" >> "${parent_tag_path}/value"
+        elif [[ "${xml_line}" =~ ([\<\>]) ]]; then
+            # If it has angle brackets but isn't a tag
+            echo "ERROR: Failed to parse the line: ${xml_line}" 1>&2
+            exit 2
         fi
-    fi
+
+        # Handles if another tag with the same name at the current path of the
+        # xml is encountered
+        if [ -d "${tag_path}" ]; then
+            # If there aren't any subfolders for each repreated tag then we can
+            # assume that the existing folder is the first instance of that tag
+            # so we rename it to reflect that, create a new folder with the tag
+            # name and move it into that
+            if [ ! -d "${tag_path}/${tag_name}-1" ] ; then
+                mv "${tag_path}" "${tag_path}-1"
+                mkdir -p "${tag_path}"
+                mv "${tag_path}-1" "${tag_path}/"
+            fi
+
+            readarray dir_lst <<< $(ls -d1 ${tag_path}/${tag_name}-*)
+            local tag_path="${tag_path}/${tag_name}-$(( ${#dir_lst[@]} + 1 ))"
+            # If the current parent tag is is the repeated tag then save the
+            # new path so it may be preserved for the nested tags. It will be
+            # reset once the closing parent tag is encountered
+            if [[ ${tag_name} == ${tag_stack[$stack_ptr]} ]]; then
+                local parent_tag_path="${tag_path}"
+            fi
+        fi
+        mkdir -p "${tag_path}"
+
+        # Parses for string body between tags. Empty lines are ignored unless
+        # the parent tag is a description tag
+        local value="${xml_line#*${open_tag_regex}}"
+        local value="${value%${close_tag_regex}*}"
+        local value="${value/*${self_closing_tag_regex}*}"
+        if [ -n "${value}" || "${tag_stack[-1]}" == "description" ]; then
+            echo "${value}" > "${tag_path}/value"
+        fi
+
+        # Parse for tag args
+        read tag <<< $(echo ${xml_line}
+            | grep -oP "<${tag_name}${tag_arg_lst_regex}[/]?>")
+        while read arg; do
+            if [ -n "${arg}" ]; then
+                local val="${arg##*=\"}"
+                echo "${val%\"}" > "${tag_path}/${arg%%=*}.val"
+            fi
+        done <<< $(echo ${tag} | grep -oP "${tag_arg_regex}")
     done < /dev/stdin
 
     load_config_data

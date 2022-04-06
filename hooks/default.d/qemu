@@ -126,6 +126,7 @@ function traverse_pci_dev_tree {
     if [ -n "$(command -v "${action}")" ]; then
         "${action}" "${curr_node}"
     else
-        echo "ERROR: PCI ACTION UNDEFINED"
+        echo "ERROR: PCI ACTION UNDEFINED" 1>&2
+        exit 2
     fi
 } # End-traverse_pci_dev_tree

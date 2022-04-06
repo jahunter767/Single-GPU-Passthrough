@@ -24,6 +24,7 @@ source "./default" "${@}" "<" "/dev/stdin"
 #     as DRBD or missing bridges. This is called as:
 #-----------------------------------------------------------------------------
 function prepare_begin {
+    set -x
     parse_xml
 
     local desc_val="$(cat "${TMP_CONFIG_PATH}/domain/description/value")"
@@ -34,7 +35,8 @@ function prepare_begin {
     if [ ${renderer_count} -eq 0 ]; then
         config_flags=("--single-gpu" "${config_flags[@]}")
     elif [ ${renderer_count} -lt 0 ]; then
-        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})"
+        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})" 1>&2
+        exit 2
     fi
 
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
@@ -42,7 +44,7 @@ function prepare_begin {
     fi
 
     for f in ${config_flags[@]}; do
-        case $f in
+        case ${f} in
             --single-gpu)
                 echo "Stopping Display Manager"
                 stop_display_manager
@@ -127,7 +129,8 @@ function stopped_end     { echo "stopped_end:     Pass"; } # End-stopped_end
 #-----------------------------------------------------------------------------
 function release_end {
     if [ -z "$(command -v "load_config_data")" ]; then
-        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
+        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" 1>&2
+        exit 2
     fi
 
     load_config_data
@@ -160,13 +163,14 @@ function release_end {
     if [ ${renderer_count} -eq 0 ]; then
         config_flags=("--single-gpu" "${config_flags[@]}")
     elif [ ${renderer_count} -lt 0 ]; then
-        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})"
+        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})" 1>&2
+        exit 2
     fi
 
     declare -a flags
     flags=${@}
     for f in ${config_flags[@]}; do
-        case $f in
+        case ${f} in
             --single-gpu)
                 echo "Rebinding EFI-Framebuffer"
                 echo "Rebinding VTconsoles"
