@@ -12,7 +12,7 @@ lscpu -e
 echo -e "\n-------------------------IOMMU Groups-------------------------\n"
 
 shopt -s nullglob
-for g in `find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | sort -V`; do
+for g in $(ls -vd1 /sys/kernel/iommu_groups/*); do
     echo -e "${GROUP_FORMAT}IOMMU Group ${g##*/}:${NO_FORMAT}"
 
     for d in ${g}/devices/*; do
@@ -36,7 +36,7 @@ for g in `find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | sort -V`; do
         echo -en "${ATTACHED_DEVICES_FORMAT}"
 
         # Finds all the connected displays
-        ports=$(find ${d}/drm/card[0-9+]/card[0-9+]-* -maxdepth 0 -type d)
+        ports=$(ls -d1 ${d}/drm/card[0-9+]/card[0-9+]-*)
         if [[ ${ports} != "" && ${ports} != "." ]]; then
             echo -e "\t\tPorts:"
             for p in ${ports}; do
@@ -48,7 +48,7 @@ for g in `find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | sort -V`; do
         fi
 
         # Finds all the connected USB devices
-        usb_ctrls=$(find ${d}/usb[0-9+] -maxdepth 0 -type d)
+        usb_ctrls=$(ls -d1 ${d}/usb[0-9+])
         if [[ ${usb_ctrls} != "" && ${usb_ctrls} != "." ]]; then
             echo -e "\t\tUSB Devices:"
             for uc in ${usb_ctrls}; do
@@ -60,11 +60,21 @@ for g in `find /sys/kernel/iommu_groups/* -maxdepth 0 -type d | sort -V`; do
         fi
 
         # Finds all the connected storage devices
-        storage_drives=$(find ${d}/ata*/host*/target*/[0-9]:[0-9]:[0-9]:[0-9]/block/sd* -maxdepth 0 -type d)
+        storage_drives=$(ls -d1 ${d}/ata*/host*/target*/[0-9]:[0-9]:[0-9]:[0-9]/block/sd*)
         if [[ ${storage_drives} != "" && ${storage_drives} != "." ]]; then
             echo -e "\t\tStorage Drives:"
             for sd in ${storage_drives}; do
                 echo -e "\t\t\t$(lsblk -PS /dev/$(basename ${sd}))"
+            done
+            echo
+        fi
+
+        # Lists partitions if it is an NVMe drive
+        nvme_partitions=$(ls -d1 ${d}/nvme/nvme[0-9+]/nvme[0-9+]n[0-9+]/nvme[0-9+]n[0-9+]p[0-9+])
+        if [[ "${nvme_partitions}" != "." ]]; then
+            echo -e "\t\tNVMe Drive Partitions:"
+            for nvme_p in ${nvme_partitions}; do
+                echo -e "\t\t\t$(lsblk -P /dev/$(basename ${nvme_p}))"
             done
             echo
         fi
