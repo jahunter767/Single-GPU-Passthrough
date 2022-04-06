@@ -24,7 +24,6 @@ source "./default" "${@}" "<" "/dev/stdin"
 #     as DRBD or missing bridges. This is called as:
 #-----------------------------------------------------------------------------
 function prepare_begin {
-    set -x
     parse_xml
 
     local desc_val="$(cat "${TMP_CONFIG_PATH}/domain/description/value")"
@@ -74,7 +73,7 @@ function prepare_begin {
                 echo "Debugging was enabled"
             ;;
             *)
-                echo "Warning: Undefined tag: ${f}"
+                echo "Warning: Undefined tag: ${f}" 1>&2
             ;;
         esac
     done
@@ -196,7 +195,7 @@ function release_end {
                 echo "Debugging was enabled"
             ;;
             *)
-                echo "Warning: Undefined tag: ${f}"
+                echo "Warning: Undefined tag: ${f}" 1>&2
             ;;
         esac
     done
