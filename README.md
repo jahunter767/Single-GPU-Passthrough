@@ -5,6 +5,13 @@ for single GPU passthrough. Most of the information here was taken from several
 resources I used when coming up with my setup so I won't get into too much of
 the basics to keep this short.
 
+## TODO
+
+1. Update readme instructions on how to use the hooks in this repository
+2. All the other script improvements scattered around the hook scripts
+    (Search "@TODO" to find them). Most improvements right now are to make the
+    hooks more dynamic when it comes to enabling/disabling host features.
+
 ## Credits
 
 First of I would like to acknowledge the various guides and resources I used
