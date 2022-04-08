@@ -43,7 +43,8 @@ function parse_xml {
         rm -r "${TMP_CONFIG_PATH}"
     fi
     mkdir -p "${TMP_CONFIG_PATH}"
-    mkdir -p "${TMP_CONFIG_PATH}/state"
+    mkdir -p "${TMP_CONFIG_PATH}/state/pci-devs"
+    mkdir -p "${TMP_CONFIG_PATH}/state/drives"
 
     declare -a tag_stack
     local tag_path="${TMP_CONFIG_PATH}"

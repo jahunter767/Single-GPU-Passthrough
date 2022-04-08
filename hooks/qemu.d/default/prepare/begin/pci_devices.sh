@@ -33,12 +33,42 @@ function unbind_efi_framebuffer {
 function unbind_pci_devices {
     declare -a unbind_stack
 
+    # Prepares the pci device to be unbound. This includes tasks like detecting
+    # and unmounting filesystems or detaching downstream devices attached to it
+    function detach_pci_dev_prep {
+        local device="$(basename "$(realpath "${1}")")"
+        local driver_path="/sys/bus/pci/devices/${device}/driver"
+        local driver="$(basename "$(realpath "${driver_path}")")"
+
+        mkdir -p "${TMP_CONFIG_PATH}/state/pci-devs/${device}"
+        mkdir -p "${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs"
+        echo "${driver}" > "${TMP_CONFIG_PATH}/state/pci-devs/${device}/driver.val"
+
+        # Unmounts all file systems on any attached devices
+        readarray -t blk_devs <<< $(ls -d /dev/disk/by-path/pci-${device}-*-part*)
+        if [[ -n "${blk_devs[@]}" ]]; then
+            local drives="$(realpath ${blk_devs[@]} | sort -u)"
+            echo "${drives}" > "${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs/drives.val"
+            unmount_drives "${drives}"
+        fi
+
+        # Unbinds all attached USB devices
+        # while read usb_dev; do
+        #     local vend="$(cat "${usb_dev}/idVendor")"
+        #     local prod="$(cat "${usb_dev}/idProduct")"
+        #     local usb_dev_id="${vend} ${prod}"
+        #     # Store the driver name in ${TMP_CONFIG_PATH}/state/drivers/usb/${usb_dev_id}.val
+        #     echo "${usb_dev_id} > ${usb_dev}/driver/unbind"
+        # done <<< $(ls -d1 /sys/bus/pci/devices/${device}/usb+([0-9])/+([0-9])-+([0-9]))
+    } # End-detach_pci_dev_prep
+
     function detach {
         local device=$(basename "$(realpath "${1}")")
         local driver_path="/sys/bus/pci/devices/${device}/driver"
         local curr_module="$(basename "$(realpath "${driver_path}/module")")"
         if [[ ! "${unbind_stack[@]}" =~ ${device} ]]; then
             if [[ ! "${curr_module}" =~ (vfio) ]]; then
+                detach_pci_dev_prep "${device}"
                 detach_pci_dev "${device}"
             fi
             unbind_stack=("${device}" "${unbind_stack[@]}")
@@ -73,7 +103,7 @@ function load_vfio {
     # @TODO: It might be worth it to store if they were already loaded so we
     #        don't unload them if they were already loaded
     #        If they are to be stored, the best place might be
-    #        ${TMP_CONFIG_PATH}/state/pci_devices/existing_modules.val
+    #        ${TMP_CONFIG_PATH}/state/pci-devs/existing_modules.val
     for v in ${VFIO_KMODS[@]}; do
         # modprobe ${v}
         echo ${v}

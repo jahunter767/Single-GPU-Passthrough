@@ -1,7 +1,7 @@
 #! /bin/bash
 
 # set -x
-set -e
+# set -e
 
 # Reads in all the functions defined in qemu.d/default/<hook_name>/<state_name>/
 # Most of the functions not defined here or in default that are called here

@@ -86,7 +86,7 @@ function renderer_check {
 
     local remaining_renderers=${#renderers[@]}
     for r in ${renderers}; do
-        if [[ "${HOSTDEV_LIST}" =~ ([:space:])*${r}([:space:])* ]]; then
+        if [[ "${HOSTDEV_LIST[@]}" =~ ([:space:])*${r}([:space:])* ]]; then
             local remaining_renderers=$(( ${remaining_renderers} - 1 ))
         fi
     done
@@ -94,28 +94,73 @@ function renderer_check {
     echo ${remaining_renderers}
 } # End-renderer_check
 
-# @TODO: Add functions to detect and mount/unmount nvme partitions or other
-#        devices attached to it
-
-
 function detach_pci_dev {
     local device=$(basename "$(realpath "${1}")")
-    local driver_path="/sys/bus/pci/devices/${device}/driver"
-    local driver="$(basename "$(realpath "${driver_path}")")"
-    echo "${driver}" > "${TMP_CONFIG_PATH}/state/${device}-driver.val"
+    local dev_path="/sys/bus/pci/devices/${device}"
+    #local vendor="$(cat ${dev_path}/vendor)"
+    #local device="$(cat ${dev_path}/device)"
+    #local dev_id="${vendor#0x} ${device#0x}"
+    local driver_path="$(realpath "${dev_path}/driver")"
+    #local driver="$(basename "${driver_path}")"
+
     #echo "${device}" > "${driver_path}/unbind"
     echo "${device} > ${driver_path}/unbind"
+
+    # This prevents autoprobing from automatically reconnecting the device to
+    # the current driver
+    #echo "${dev_id}" > "${driver_path}remove_id"
+    #echo "${dev_id} > ${driver_path}remove_id"
 } # End-detach_pci_dev
 
 function attach_pci_dev {
     local device=$(basename "$(realpath "${1}")")
     local driver="${2}"
     local dev_path="/sys/bus/pci/devices/${device}"
-    local vendor="$(cat ${dev_path}/vendor)"
-    local device="$(cat ${dev_path}/device)"
-    local dev_id="${vendor#0x}:${device#0x}"
-    #echo "${dev_id}" > "/sys/bus/pci/drivers/${driver}/new_id"
-    echo "${dev_id} > /sys/bus/pci/drivers/${driver}/new_id"
+    local driver_path="/sys/bus/pci/drivers/${driver}"
+
+    # Resetting the pci device
+    if [[ -e "${dev_path}/reset" ]]; then
+        echo 1 > "${dev_path}/reset"
+    else
+        echo "Notice: This pci device is not directly resettable. If the \
+            VM fails to start, try starting it without passing through \
+            this device: ${device}" 1>&2
+    fi
+
+    # Binding the pci device to the new driver
+    if [[ ! -d "${driver_path}/${device}" ]]; then
+        if [[ -d "${dev_path}/driver" ]]; then
+            echo -e "ERROR: This pci device is still bound to another driver.\n\
+                \tDevice: ${device}\n\
+                \tDriver: $(basename "$(realpath "${dev_path}/driver")")" 1>&2
+            exit 2
+        fi
+
+        #echo "${device}" > "${driver_path}/bind"
+        #local pred="${?}"
+        local pred="$(exit 1)$?"
+        case "${pred}" in
+            0)
+                # The device was previously bound to the driver so proceed with
+                # script
+            ;;
+            1)
+                # The device was not previously bound to the driver
+                local vendor="$(cat ${dev_path}/vendor)"
+                local device="$(cat ${dev_path}/device)"
+                local dev_id="${vendor#0x} ${device#0x}"
+                #echo "${dev_id}" > "/sys/bus/pci/drivers/${driver}/new_id"
+                echo "${dev_id} > /sys/bus/pci/drivers/${driver}/new_id"
+                #echo "${device}" > "${driver_path}/bind"
+                #echo "${device} > ${driver_path}/bind"
+            ;;
+            *)
+                echo -e "ERROR: The command below failed with code ${pred}:\n\
+                    echo \"${device}\" > \"${driver_path}/bind\"" 1>&2
+                exit 2
+            ;;
+        esac
+    fi
 } # End-attach_pci_dev
 
 function traverse_pci_dev_tree {
