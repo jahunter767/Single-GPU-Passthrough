@@ -3,6 +3,11 @@
 #-----------------------------------------------------------------------------
 # Libvirt: Hooks for specific system management
 # https://libvirt.org/hooks.html
+#     When a QEMU guest is stopped, the qemu hook script is called in two
+#     locations, to match the startup.
+#
+#     ...
+#
 #     Then, after libvirt has released all resources, the hook is called again,
 #     since 0.9.0 , to allow any additional resource cleanup:
 #-----------------------------------------------------------------------------

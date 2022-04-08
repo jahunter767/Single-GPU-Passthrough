@@ -44,8 +44,9 @@ function bind_pci_devices {
         sleep 2
 
         # Remounts all file systems on any attached devices
-        if [[ -s "${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs/drives.val" ]]; then
-            remount_drives $(cat "${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs/drives.val")
+        local drive_lst="${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs/drives.val"
+        if [[ -f "${drive_lst}" && -s "${drive_lst}" && ]]; then
+            remount_drives $(cat "${drive_lst}")
         fi
 
         # Rebind all attached USB devices

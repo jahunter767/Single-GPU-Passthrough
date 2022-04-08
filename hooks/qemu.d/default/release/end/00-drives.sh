@@ -13,9 +13,12 @@ function remount_drives {
         #   remounted automatically unless there are credentials stored in
         #   the system (like in a TPM chip)
         # - disk: represents the full drive (eg. /dev/sda)
-        if [[ -e "${TMP_CONFIG_PATH}/state/drives/${blk_dev}.val" ]]; then
-            #mount "/dev/${blk_dev}" "$(cat "${TMP_CONFIG_PATH}/state/drives/${blk_dev}.val")"
-            echo "mount /dev/${blk_dev} $(cat "${TMP_CONFIG_PATH}/state/drives/${blk_dev}.val")"
-        fi
+        while read bdev_mt_pt; do
+            if [[ -n "${bdev_mt_pt}" ]]; then
+                local bdev="$(basename ${bdev_mt_pt})"
+                #mount "/dev/${bdev%\.val}" "$(cat "${bdev_mt_pt}")"
+                echo "mount /dev/${bdev%\.val} $(cat "${bdev_mt_pt}")"
+            fi
+        done <<< $(ls -d1 ${TMP_CONFIG_PATH}/state/drives/${blk_dev}*.val)
     done
 } # End-remount_drives

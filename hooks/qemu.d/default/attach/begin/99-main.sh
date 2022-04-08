@@ -8,5 +8,6 @@
 #     It is called as:
 #-----------------------------------------------------------------------------
 function attach_begin {
+    parse_xml
     echo "attach_begin:    Pass"
 } # End-attach_begin

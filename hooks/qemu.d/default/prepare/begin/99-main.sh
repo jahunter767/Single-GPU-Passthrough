@@ -12,6 +12,7 @@
 #-----------------------------------------------------------------------------
 function prepare_begin {
     parse_xml
+    mkdir -p ${TMP_CONFIG_PATH}/state/{drives,pci-devs}
 
     local desc_val="$(cat "${TMP_CONFIG_PATH}/domain/description/value")"
     readarray config_flags <<< $(parse_description_args "${desc_val}")

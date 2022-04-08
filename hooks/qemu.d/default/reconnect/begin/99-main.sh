@@ -9,5 +9,6 @@
 #     It is called as:
 #-----------------------------------------------------------------------------
 function reconnect_begin {
+    parse_xml
     echo "reconnect_begin: Pass"
 } # End-reconnect_begin
