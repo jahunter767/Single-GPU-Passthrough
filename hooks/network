@@ -8,3 +8,12 @@
 # are likely defined there. If you want to override them, you can redefine
 # them in a script here qemu.d/<vm_name>/<hook_name>/<state_name>/
 source "${0%/network}/default" "${@}" "<" "/dev/stdin"
+
+# Calls the relevant function based on the hook name and VM state
+if [ -n "$(command -v "${HOOK_NAME/-/_}_${STATE_NAME}")" ]; then
+    echo "--------------NEXT--------------" >> "${LOG_FILE}"
+    echo "$(date): ${0} ${@}" >> "${LOG_FILE}"
+    eval \"${HOOK_NAME/-/_}_${STATE_NAME}\" &>> "${LOG_FILE}"
+else
+    echo "ERROR: Function not found: ${HOOK_NAME/-/_}_${STATE_NAME}" >> "${LOG_FILE}"
+fi

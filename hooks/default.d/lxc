@@ -1,1 +1,14 @@
 #! /bin/bash
+
+##############################################################################
+# Extract device data from tmp folder structure
+##############################################################################
+
+function load_config_data {
+    echo "Reading data from the XML"
+} # End-load_config_data
+
+##############################################################################
+# Functions commonly used across multiple different types of hooks
+##############################################################################
+

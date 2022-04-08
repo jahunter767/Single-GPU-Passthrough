@@ -1,1 +1,32 @@
 #! /bin/bash
+
+declare -g IF_NAME
+declare -g IP_ADDR
+declare -g NET_DOMAIN
+
+##############################################################################
+# Extract device data from tmp folder structure
+##############################################################################
+
+function load_config_data {
+    echo "Reading data from the XML"
+    local temp="${TMP_CONFIG_PATH}/hookData/network/bridge/name.val"
+    if [[ -f "${temp}" && -s "${temp}" ]]; then
+        IF_NAME="$(cat ${temp})"
+    fi
+
+    local temp="${TMP_CONFIG_PATH}/hookData/network/ip/address.val"
+    if [[ -f "${temp}" && -s "${temp}" ]]; then
+        IP_ADDR="$(cat ${temp})"
+    fi
+
+    local temp="${TMP_CONFIG_PATH}/hookData/network/domain/name.val"
+    if [[ -f "${temp}" && -s "${temp}" ]]; then
+        NET_DOMAIN="$(cat ${temp})"
+    fi
+} # End-load_config_data
+
+##############################################################################
+# Functions commonly used across multiple different types of hooks
+##############################################################################
+

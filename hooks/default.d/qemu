@@ -59,6 +59,7 @@ function get_host_thread {
 } # End-get_host_thread
 
 function load_config_data {
+    echo "Reading data from the XML"
     readarray -t DRIVE_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
     readarray -t HOSTDEV_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_domain_id")"
     readarray -t CPU_THREAD_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"

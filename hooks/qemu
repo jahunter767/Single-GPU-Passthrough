@@ -14,4 +14,6 @@ if [ -n "$(command -v "${HOOK_NAME}_${STATE_NAME}")" ]; then
     echo "--------------NEXT--------------" >> "${LOG_FILE}"
     echo "$(date): ${0} ${@}" >> "${LOG_FILE}"
     eval \"${HOOK_NAME}_${STATE_NAME}\" &>> "${LOG_FILE}"
+else
+    echo "ERROR: Function not found: ${HOOK_NAME/-/_}_${STATE_NAME}" >> "${LOG_FILE}"
 fi

@@ -17,9 +17,9 @@ STATE_NAME="${3}"
 MISC="${@:4}"
 
 HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
-# TMP_CONFIG_PATH="/tmp/libvirt-${GUEST_NAME}"
-TMP_CONFIG_PATH="tmp/libvirt-${GUEST_NAME}"
-# HOOK_LOG_PATH="/var/log/libvirt/hooks"
+# TMP_CONFIG_PATH="/tmp/libvirt-xml/${DOMAIN_NAME}/${GUEST_NAME}"
+TMP_CONFIG_PATH="tmp/libvirt-xml/${DOMAIN_NAME}/${GUEST_NAME}"
+# HOOK_LOG_PATH="/var/log/libvirt/hooks/${DOMAIN_NAME}"
 HOOK_LOG_PATH="${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}"
 # LOG_FILE="${HOOK_LOG_PATH}/${GUEST_NAME}.log"
 LOG_FILE="${HOOK_LOG_PATH}/vm.log"
@@ -43,8 +43,6 @@ function parse_xml {
         rm -r "${TMP_CONFIG_PATH}"
     fi
     mkdir -p "${TMP_CONFIG_PATH}"
-    mkdir -p "${TMP_CONFIG_PATH}/state/pci-devs"
-    mkdir -p "${TMP_CONFIG_PATH}/state/drives"
 
     declare -a tag_stack
     local tag_path="${TMP_CONFIG_PATH}"
@@ -176,7 +174,7 @@ function include_functions {
             if [ ! -z "${file}" ]; then
                 source "${file}" "$@"
             fi
-        done <<< "$(find -L "${hpath}" -maxdepth 1 -type f -executable -print;)"
+        done <<< "$(find -L "${hpath}" -maxdepth 1 -type f -executable | sort)"
     fi
 } # End-include_functions
 
