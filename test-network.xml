@@ -1,0 +1,14 @@
+<hookData>
+  <network>
+    <name>vm-net</name>
+    <uuid>62d7391d-2ddc-4e45-ad33-e7ac7c15f5f4</uuid>
+    <forward mode='nat'/>
+    <bridge name='virtbr0' stp='on' delay='0'/>
+    <mac address='52:54:00:c8:78:1d'/>
+    <domain name='vm' localOnly='yes'/>
+    <ip address='172.16.1.1' netmask='255.255.255.0'>
+      <dhcp>
+        <range start='172.16.1.100' end='172.16.1.150'/>
+      </dhcp>
+    </ip>
+  </network>
