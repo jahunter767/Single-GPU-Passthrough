@@ -1,16 +1,5 @@
 #! /bin/bash
 
-internal_zone=("libvirt")
-internal_services=("")
-
-external_services=("")
-external_zone=("")
-
-nfs_shares=("")
-nfs_user="username"
-nfs_group="username"
-vm_hostname="172.16.1.0/24"
-
 # @TODO: Save the relevant values under ${TMP_CONFIG_PATH}/state/network/*.val
 #        to allow for more dynamic enabling and disabling of features without
 #        disrupting other VMs started before or after that require similar

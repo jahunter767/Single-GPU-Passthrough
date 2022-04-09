@@ -1,16 +1,5 @@
 #! /bin/bash
 
-internal_zone=("libvirt")
-internal_services=("")
-
-external_services=("")
-external_zone=("")
-
-nfs_shares=("/path/to/share")
-nfs_user="username"
-nfs_group="username"
-vm_hostname="172.16.1.0/24"
-
 # @TODO: See todo in hooks/default/prepare/begin/network.sh
 
 # Disabling services for the specified zone

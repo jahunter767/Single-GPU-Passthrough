@@ -8,6 +8,23 @@ declare -ga CPU_THREAD_LIST
 
 VFIO_KMODS=("vfio" "vfio_iommu_type1" "vfio_pci")
 
+# Space separated list of host threads not pinned by default. Leaving it blank
+# assumes that all threads are not pinned
+default_user_allowedCPUs=""
+default_system_allowedCPUs=""
+default_init_allowedCPUs=""
+
+internal_zone=("libvirt")
+internal_services=("")
+
+external_services=("")
+external_zone=("")
+
+nfs_shares=("")
+nfs_user="username"
+nfs_group="username"
+vm_hostname="172.16.1.0/24"
+
 ##############################################################################
 # Extract device data from tmp folder structure
 ##############################################################################
