@@ -12,6 +12,9 @@
 #-----------------------------------------------------------------------------
 function prepare_begin {
     parse_xml
+    if [[ -d "${TMP_CONFIG_PATH}/state" ]]; then
+        rm -r "${TMP_CONFIG_PATH}/state"
+    fi
     mkdir -p ${TMP_CONFIG_PATH}/state/{drives,pci-devs}
 
     local desc_val="$(cat "${TMP_CONFIG_PATH}/domain/description/value")"
@@ -50,7 +53,8 @@ function prepare_begin {
                 enable_services ${external_zone} ${external_services[*]}
             ;;
             --enable-nfs)
-                echo "Exporting the following NFS shares to the VM"
+                echo "Exporting the following NFS shares to the VM:"
+                echo "${nfs_shares[@]}"
                 export_nfs_shares
             ;;
             --pin-cpu-cores)

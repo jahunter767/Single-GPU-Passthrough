@@ -68,7 +68,8 @@ function release_end {
                 disable_services ${external_zone} ${external_services[*]}
             ;;
             --enable-nfs)
-                echo "Unexporting the following NFS shares to the VM"
+                echo "Unexporting the following NFS shares from the VM:"
+                echo "${nfs_shares[@]}"
                 unexport_nfs_shares
             ;;
             --pin-cpu-cores)

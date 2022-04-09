@@ -40,7 +40,11 @@ function parse_xml {
     fi
 
     if [ -d "${TMP_CONFIG_PATH}" ]; then
-        rm -r "${TMP_CONFIG_PATH}"
+        while read f; do
+            if [[ -n "$(basename ${f})" && "$(basename ${f})" != "state" ]]; then
+                rm -r "${f}"
+            fi
+        done <<< $(ls -d1 ${TMP_CONFIG_PATH}/*)
     fi
     mkdir -p "${TMP_CONFIG_PATH}"
 
