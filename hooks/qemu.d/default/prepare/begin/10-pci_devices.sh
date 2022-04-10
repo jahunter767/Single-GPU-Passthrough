@@ -13,21 +13,23 @@ function stop_display_manager {
 } # End-stop_display_manager
 
 function unbind_vtconsoles {
-    # @TODO:  Add code to check if it is already unbound before proceeding
     for v in /sys/class/vtconsole/vtcon*; do
-        #echo 0 > ${v}/bind
-        echo "0 > ${v}/bind"
+        if [[ $(cat ${v}/bind) != 0 ]]; then
+            #echo 0 > ${v}/bind
+            echo "0 > ${v}/bind"
+        fi
     done
 } # End-unbind_vtconsoles
 
 function unbind_efi_framebuffer {
-    # @TODO:  Add code to check if it is already unbound before proceeding
-    #echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/unbind
-    echo "efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind"
+    if [[ -d "/sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0" ]]; then
+        #echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/unbind
+        echo "efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind"
 
-    # Avoid a Race condition by waiting 2 seconds. This can be calibrated
-    # to be shorter or longer if required for your system
-    sleep 5
+        # Avoid a Race condition by waiting 2 seconds. This can be calibrated
+        # to be shorter or longer if required for your system
+        sleep 5
+    fi
 } # End-unbind_efi_framebuffer
 
 function unbind_pci_devices {

@@ -8,7 +8,7 @@ function unload_vfio {
     #        Potential file to check:
     #        ${TMP_CONFIG_PATH}/state/pci-devs/existing_modules.val
     #modprobe -qr "${VFIO_KMODS[@]}"
-    echo "modprobe -qr ${VFIO_KMODS[@]}"
+    echo "modprobe -r ${VFIO_KMODS[@]}"
 } # End-unload_vfio
 
 function bind_pci_devices {
@@ -71,16 +71,18 @@ function bind_pci_devices {
 } # End-bind_pci_devices
 
 function bind_efi_framebuffer {
-    # @TODO:  Add code to check if it is already bound before proceeding
-    #echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/bind
-    echo "efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind"
+    if [[ ! -d "/sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0" ]]; then
+        #echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/bind
+        echo "efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind"
+    fi
 } # End-bind_efi_framebuffer
 
 function bind_vtconsoles {
-    # @TODO:  Add code to check if it is already bound before proceeding
     for v in /sys/class/vtconsole/vtcon*; do
-        #echo 1 > ${v}/bind
-        echo "1 > ${v}/bind"
+        if [[ $(cat ${v}/bind) != 1 ]]; then
+            #echo 1 > ${v}/bind
+            echo "1 > ${v}/bind"
+        fi
     done
 } # End-bind_vtconsoles
 
