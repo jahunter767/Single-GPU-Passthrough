@@ -11,6 +11,8 @@ the basics to keep this short.
 2. All the other script improvements scattered around the hook scripts
     (Search "@TODO" to find them). Most improvements right now are to make the
     hooks more dynamic when it comes to enabling/disabling host features.
+3. Add discussion on networking with single GPU passthrough on WiFi connected
+    devices
 
 ## Credits
 
