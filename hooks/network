@@ -16,4 +16,5 @@ if [ -n "$(command -v "${HOOK_NAME/-/_}_${STATE_NAME}")" ]; then
     eval \"${HOOK_NAME/-/_}_${STATE_NAME}\" &>> "${LOG_FILE}"
 else
     echo "ERROR: Function not found: ${HOOK_NAME/-/_}_${STATE_NAME}" >> "${LOG_FILE}"
+    declare -F >> "${LOG_FILE}"
 fi
