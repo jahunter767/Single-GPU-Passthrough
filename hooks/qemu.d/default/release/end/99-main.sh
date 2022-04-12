@@ -29,8 +29,10 @@ function release_end {
         echo "Rebinding the following PCI devices to the host:"
         echo "${HOSTDEV_LIST[@]}"
         bind_pci_devices "${HOSTDEV_LIST[@]}"
-        echo "Unloading VFIO modules"
-        unload_vfio
+        echo "Loading DRM (Direct Rendering Manager) kernel module"
+        load_drm_kmods
+        # echo "Unloading VFIO modules"
+        # unload_vfio
     fi
 
     if [[ ${#DRIVE_LIST[@]} -gt 0 && -n "${DRIVE_LIST[@]}" ]]; then
@@ -39,25 +41,30 @@ function release_end {
         remount_drives "${DRIVE_LIST[@]}"
     fi
 
-    # @TODO: Verify this
-    # This check comes after rebinding all the PCI devices as the rendering
-    # devices only show up when a GPU is bound to it's original driver
-    local renderer_count=$(renderer_check)
-    if [ ${renderer_count} -eq 0 ]; then
-        config_flags=("--single-gpu" "${config_flags[@]}")
-    elif [ ${renderer_count} -lt 0 ]; then
-        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})" 1>&2
-        exit 2
+    # Checks if all the current GPU's with graphical outputs were previously
+    # bound to the VM. This check comes after rebinding all the PCI devices
+    # and loading the necessary modules for the drm module as the rendering
+    # devices only show up in /sys/class/drm after that
+    local enable_host_graphics=1
+    for r in $(get_gpu_with_output_list); do
+        if [[ ! "${HOSTDEV_LIST[@]}" =~ "${r}" ]]; then
+            enable_host_graphics=0
+        fi
+    done
+    if [ ${enable_host_graphics} -eq 1 ]; then
+        local config_flags=("--no-host-graphics" "${config_flags[@]}")
     fi
 
-    declare -a flags
-    flags=${@}
+    declare -p config_flags
     for f in ${config_flags[@]}; do
         case ${f} in
-            --single-gpu)
+            --no-host-graphics)
                 echo "Rebinding EFI-Framebuffer"
+                bind_efi_framebuffer
                 echo "Rebinding VTconsoles"
+                bind_vtconsoles
                 echo "Starting Display Manager"
+                start_display_manager
             ;;
             --enable-internal-services)
                 echo "Removing ${internal_services[*]} services from ${internal_zone} firewall zone"

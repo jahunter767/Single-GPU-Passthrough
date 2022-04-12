@@ -91,26 +91,45 @@ function load_config_data {
 # Functions commonly used across multiple different types of hooks
 ##############################################################################
 
-#-----------------------------------------------------------------------------
-# Check if enough rendering GPU's would remain after passing through hostdevs
-# @TODO: Check if this is a reasonable way to do this across various system
-#        configurations
-#-----------------------------------------------------------------------------
-function renderer_check {
+# Returns a list og GPU's that have ports for display outputs
+function get_gpu_with_output_list {
     declare -a renderers
     while read r; do
-        renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
-    done <<< "$(ls -d1 /sys/class/drm/render*/device)"
-
-    local remaining_renderers=${#renderers[@]}
-    for r in ${renderers}; do
-        if [[ "${HOSTDEV_LIST[@]}" =~ ([:space:])*${r}([:space:])* ]]; then
-            local remaining_renderers=$(( ${remaining_renderers} - 1 ))
+        # If the renderer has ports for display out
+        if [[ -n "$(ls -d ${r}/drm/card*/card*-*)" ]]; then
+            renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
         fi
-    done
+    done <<< "$(ls -d1 /sys/class/drm/render*/device)"
+    echo ${renderers}
+} # End-get_gpu_with_output_list
 
-    echo ${remaining_renderers}
-} # End-renderer_check
+# Returns a list containing the module passed and all the modules that directly
+# or indirectly depend on it
+function get_module_list {
+    declare -a mod_lst
+
+    # Traverses the tree of modules in a breadth-first manner
+    function traverse_mod_tree {
+        declare -a used_by
+        local mods="$(lsmod |
+            grep -oP "${1}[[:space:]]+[[:digit:]]+[[:space:]]+[[:digit:]]+[[:space:]]+[[:word:]-_,]+")"
+        local mods="${mods##* }"
+        for m in $(echo "${mods}" | grep -oPm1 "[^,]+"); do
+            if [[ -n "${m}" && (! " ${mod_lst[@]} " =~ " ${m} ") ]]; then
+                mod_lst[${#mod_lst[@]}]="${m}"
+                local used_by[${#used_by[@]}]="${m}"
+            fi
+        done
+        for m in ${used_by[@]}; do
+            traverse_mod_tree "${m}"
+        done
+    } # End-traverse_mod_tree
+
+    local mod="${1}"
+    local mod_lst[0]="${mod}"
+    traverse_mod_tree "${mod}"
+    echo "${mod_lst[@]}"
+} # End-get_module_list
 
 function detach_pci_dev {
     local device=$(basename "$(realpath "${1}")")

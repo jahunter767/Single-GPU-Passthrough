@@ -2,7 +2,7 @@
 
 # Author: Mateus Souza
 function stop_display_manager {
-    local managers=("sddm" "gdm" "lightdm" "lxdm" "xdm" "mdm" "display-manager")
+    local managers=("display-manager" "sddm" "gdm" "lightdm" "lxdm" "xdm" "mdm")
     for m in $managers; do
         if systemctl is-active --quiet "$m.service"; then
             echo "${m}" > "${TMP_CONFIG_PATH}/state/display-manager.val"
@@ -42,15 +42,19 @@ function unbind_pci_devices {
         local driver_path="/sys/bus/pci/devices/${device}/driver"
         local driver="$(basename "$(realpath "${driver_path}")")"
 
-        mkdir -p "${TMP_CONFIG_PATH}/state/pci-devs/${device}"
-        mkdir -p "${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs"
-        echo "${driver}" > "${TMP_CONFIG_PATH}/state/pci-devs/${device}/driver.val"
+        local dev_conf_path="${TMP_CONFIG_PATH}/state/pci-devs/${device}"
+        mkdir -p "${dev_conf_path}/sub-devs"
+        echo "${driver}" > "${dev_conf_path}/driver.val"
+        if [[ -d "${driver_path}/module" ]]; then
+            local module="$(basename "$(realpath "${driver_path}/module")")"
+            echo "$(get_module_list ${module})" > "${dev_conf_path}/module.val"
+        fi
 
         # Unmounts all file systems on any attached devices
         readarray -t blk_devs <<< $(ls -d /dev/disk/by-path/pci-${device}-*-part*)
         if [[ -n "${blk_devs[@]}" ]]; then
             local drives="$(realpath ${blk_devs[@]} | sort -u)"
-            echo "${drives}" > "${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs/drives.val"
+            echo "${drives}" > "${dev_conf_path}/sub-devs/drives.val"
             unmount_drives "${drives}"
         fi
 
@@ -80,6 +84,9 @@ function unbind_pci_devices {
     function attach {
         local device=$(basename "$(realpath "${1}")")
         local driver="vfio-pci"
+        if [[ ! -d "/sys/bus/pci/drivers/${driver}" ]]; then
+            load_vfio
+        fi
         attach_pci_dev "${device}" "${driver}"
     } # End-attach
 
@@ -100,6 +107,13 @@ function unbind_pci_devices {
         attach "${d}"
     done
 } # End-unbind_pci_devices
+
+function unload_drm_kmods {
+    local mod_list="$(get_module_list drm)"
+    echo "${mod_list#drm }" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+    # modprobe -r "${mod_list#drm }"
+    echo "modprobe -r ${mod_list#drm }"
+} # End-unload_drm_kmods
 
 function load_vfio {
     # @TODO: It might be worth it to store if they were already loaded so we

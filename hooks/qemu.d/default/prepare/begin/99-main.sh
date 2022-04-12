@@ -21,28 +21,39 @@ function prepare_begin {
     readarray config_flags <<< $(parse_description_args "${desc_val}")
     echo "${config_flags[@]}" > "${TMP_CONFIG_PATH}/state/args.val"
 
-    local renderer_count=$(renderer_check)
-    if [ ${renderer_count} -eq 0 ]; then
-        config_flags=("--single-gpu" "${config_flags[@]}")
-    elif [ ${renderer_count} -lt 0 ]; then
-        echo "ERROR: Unexpectedly low number of renders (renderer count: ${renderer_count})" 1>&2
-        exit 2
+    # Checks if all the current GPU's with graphical outputs are to be passed
+    # to the VM
+    local disable_host_graphics=1
+    for r in $(get_gpu_with_output_list); do
+        if [[ ! "${HOSTDEV_LIST[@]}" =~ "${r}" ]]; then
+            local disable_host_graphics=0
+        fi
+    done
+    if [ ${disable_host_graphics} -eq 1 ]; then
+        local config_flags=("--no-host-graphics" "${config_flags[@]}")
     fi
+
+    # @TODO: Check that all devices in the iommu groups of the devices to be
+    #        passed through are bound to vfio
+    # @TODO: Add check for virtualized graphics in XML if the only remaining
+    #        GPU is to be passed to the VM
 
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
         set -x
     fi
 
+    declare -p config_flags
     for f in ${config_flags[@]}; do
         case ${f} in
-            --single-gpu)
+            --no-host-graphics)
                 echo "Stopping Display Manager"
                 stop_display_manager
                 echo "Unbinding VTconsoles"
                 unbind_vtconsoles
                 echo "Unbinding EFI-Framebuffer"
                 unbind_efi_framebuffer
-                echo "Sleep"
+                echo "Unloading DRM (Direct Rendering Manager) kernel modules"
+                unload_drm_kmods
             ;;
             --enable-internal-services)
                 echo "Adding ${internal_services[*]} services to ${internal_zone} firewall zone"
@@ -77,8 +88,8 @@ function prepare_begin {
     fi
 
     if [[ ${#HOSTDEV_LIST[@]} -gt 0 && -n "${HOSTDEV_LIST[@]}" ]]; then
-        echo "Loading VFIO modules"
-        load_vfio
+        # echo "Loading VFIO modules"
+        # load_vfio
         echo "Unbinding the following PCI devices from their drivers:"
         echo "${HOSTDEV_LIST[@]}"
         unbind_pci_devices "${HOSTDEV_LIST[@]}"

@@ -7,9 +7,21 @@ function unload_vfio {
     #        may currently be using the modules
     #        Potential file to check:
     #        ${TMP_CONFIG_PATH}/state/pci-devs/existing_modules.val
-    #modprobe -qr "${VFIO_KMODS[@]}"
+    #modprobe -r "${VFIO_KMODS[@]}"
     echo "modprobe -r ${VFIO_KMODS[@]}"
 } # End-unload_vfio
+
+function load_drm_kmods {
+    # If .val file containing drm modules exists load those modules too
+    local file="${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+    if [[ -f "${file}" && -s "${file}" ]]; then
+        local drm_mods="$(cat ${file})"
+        for m in ${drm_mods}; do
+            # modprobe "${m}"
+            echo "modprobe ${m}"
+        done
+    fi
+} # End-load_drm_kmods
 
 function bind_pci_devices {
     declare -a unbind_stack
@@ -29,7 +41,21 @@ function bind_pci_devices {
 
     function attach {
         local device=$(basename "$(realpath "${1}")")
-        local driver="$(cat ${TMP_CONFIG_PATH}/state/pci-devs/${device}/driver.val)"
+        local dev_conf_path="${TMP_CONFIG_PATH}/state/pci-devs/${device}"
+        local driver="$(cat ${dev_conf_path}/driver.val)"
+
+        # If the driver can't be located, load the kernel module associated
+        # with the driver (if the driver is associated with one)
+        if [[ ! -d "/sys/bus/pci/drivers/${driver}" &&
+            -f "${dev_conf_path}" && -s "${dev_conf_path}" ]]
+        then
+            local modules="$(cat ${dev_conf_path}/module.val)"
+            for m in ${modules}; do
+                # modprobe "${m}"
+                echo "modprobe ${m}"
+            done
+        fi
+
         attach_pci_dev "${device}" "${driver}"
         attach_pci_dev_post_ops "${device}"
     } # End-attach
@@ -37,7 +63,7 @@ function bind_pci_devices {
     # Undoes any additional changes made before initially unbinding the pci
     # devices
     function attach_pci_dev_post_ops {
-        local device="$(basename "$(realpath "${1}")")"
+        local device="$(basename $(realpath ${1}))"
 
         # @TODO: Add a wait so the device can be fully activated before
         #        reattaching connected devices
@@ -45,7 +71,7 @@ function bind_pci_devices {
 
         # Remounts all file systems on any attached devices
         local drive_lst="${TMP_CONFIG_PATH}/state/pci-devs/${device}/sub-devs/drives.val"
-        if [[ -f "${drive_lst}" && -s "${drive_lst}" && ]]; then
+        if [[ -f "${drive_lst}" && -s "${drive_lst}" ]]; then
             remount_drives $(cat "${drive_lst}")
         fi
 
