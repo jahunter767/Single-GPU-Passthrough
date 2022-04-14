@@ -182,6 +182,8 @@ function include_functions {
     fi
 } # End-include_functions
 
-include_functions "${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
-include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/default/${HOOK_NAME}/${STATE_NAME}"
-include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}"
+echo "--------------NEXT--------------" >> "${LOG_FILE}"
+echo "$(date): ${0} ${@}" >> "${LOG_FILE}"
+include_functions "${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
+include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/default/${HOOK_NAME}/${STATE_NAME}" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
+include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
