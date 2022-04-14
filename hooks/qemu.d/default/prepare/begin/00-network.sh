@@ -21,3 +21,11 @@ function export_nfs_shares {
         echo "exportfs -o rw,sync,secure,all_squash,anonuid=$(id -u ${nfs_user}),anongid=$(id -g ${nfs_group}) ${vm_hostname}:${nfs_shares[i]}"
     done
 } # End-export_nfs_shares
+
+# Enable SMB shares
+function enable_smb_shares {
+    for s in  ${smb_shares[@]}; do
+        # chcon -t samba_share_t "${s}"
+        echo "chcon -t samba_share_t ${s}"
+    done
+} # End-enable_smb_shares

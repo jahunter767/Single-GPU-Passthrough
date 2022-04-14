@@ -11,7 +11,11 @@
 #     The third location, 0.9.13 , occurs after the QEMU process has
 #     successfully started up:
 #-----------------------------------------------------------------------------
-function started_begin {
+function main {
     load_config_data
     echo "started_begin:   Pass"
+} # End-main
+
+function started_begin {
+    main
 } # End-started_begin

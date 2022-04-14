@@ -8,7 +8,11 @@
 #     If the script fails, the existing QEMU process will be killed off.
 #     It is called as:
 #-----------------------------------------------------------------------------
-function reconnect_begin {
+function main {
     parse_xml
     echo "reconnect_begin: Pass"
+} # End-main
+
+function reconnect_begin {
+    main
 } # End-reconnect_begin

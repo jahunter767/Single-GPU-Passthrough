@@ -14,7 +14,11 @@
 #     hook may be used, e.g., to change location of disk images for incoming
 #     domains.
 #-----------------------------------------------------------------------------
-function migrate_begin {
+function main {
     parse_xml
     echo "migrate_begin:   Pass"
+} # End-main
+
+function migrate_begin {
+    main
 } # End-migrate_begin

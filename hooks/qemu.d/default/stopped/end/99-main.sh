@@ -8,7 +8,11 @@
 #
 #     First, since 0.8.0 , the hook is called before libvirt restores any labels:
 #-----------------------------------------------------------------------------
-function stopped_end {
+function main {
     load_config_data
     echo "stopped_end:     Pass"
+} # End-main
+
+function stopped_end {
+    main
 } # End-stopped_end

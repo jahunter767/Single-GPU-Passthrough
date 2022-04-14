@@ -15,7 +15,11 @@
 #     hook may be used, e.g., to change location of disk images for restored
 #     domains.
 #-----------------------------------------------------------------------------
-function restore_begin {
+function main {
     parse_xml
     echo "restore_begin:   Pass"
+} # End-main
+
+function restore_begin {
+    main
 } # End-restore_begin

@@ -12,8 +12,6 @@ source "${0%/qemu}/default"
 # Calls the relevant function based on the hook name and VM state
 if [ -n "$(command -v "${HOOK_NAME}_${STATE_NAME}")" ]; then
     eval \"${HOOK_NAME}_${STATE_NAME}\" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
-    # @TODO: Figure out how to write the error messages to the log file without
-    #        redirecting them from stderr entirely
 else
     echo "ERROR: Function not found: ${HOOK_NAME/-/_}_${STATE_NAME}" | tee -a "${LOG_FILE}" 1>&2
     declare -F >> "${LOG_FILE}"

@@ -18,3 +18,11 @@ function unexport_nfs_shares {
         echo "exportfs -u ${vm_hostname}:${nfs_shares[i]}"
     done
 } # End-unexport_nfs_shares
+
+# Disable SMB shares
+function disable_smb_shares {
+    for s in  ${smb_shares[@]}; do
+        # restorecon -r "${s}"
+        echo "restorecon -r ${s}"
+    done
+} # End-disable_smb_shares

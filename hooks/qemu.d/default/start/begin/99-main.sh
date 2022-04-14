@@ -12,7 +12,11 @@
 #     finished labeling all resources, but has not yet started the guest,
 #     called as:
 #-----------------------------------------------------------------------------
-function start_begin {
+function main {
     load_config_data
     echo "start_begin:     Pass"
+} # End-main
+
+function start_begin {
+    main
 } # End-start_begin

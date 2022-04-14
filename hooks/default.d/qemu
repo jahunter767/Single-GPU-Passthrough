@@ -25,6 +25,8 @@ nfs_user="username"
 nfs_group="username"
 vm_hostname="172.16.1.0/24"
 
+smb_shares=("")
+
 ##############################################################################
 # Extract device data from tmp folder structure
 ##############################################################################

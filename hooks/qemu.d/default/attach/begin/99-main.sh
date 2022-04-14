@@ -7,7 +7,11 @@
 #     is told to attach to an externally launched QEMU process.
 #     It is called as:
 #-----------------------------------------------------------------------------
-function attach_begin {
+function main {
     parse_xml
     echo "attach_begin:    Pass"
+} # End-main
+
+function attach_begin {
+    main
 } # End-attach_begin

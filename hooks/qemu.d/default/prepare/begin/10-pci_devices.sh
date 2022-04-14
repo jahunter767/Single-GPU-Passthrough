@@ -28,7 +28,7 @@ function unbind_efi_framebuffer {
 
         # Avoid a Race condition by waiting 2 seconds. This can be calibrated
         # to be shorter or longer if required for your system
-        sleep 5
+        sleep 2
     fi
 } # End-unbind_efi_framebuffer
 
@@ -110,9 +110,12 @@ function unbind_pci_devices {
 
 function unload_drm_kmods {
     local mod_list="$(get_module_list drm)"
-    echo "${mod_list#drm }" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
-    # modprobe -r "${mod_list#drm }"
-    echo "modprobe -r ${mod_list#drm }"
+    local mod_list="${mod_list#drm }"
+    echo "${mod_list}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+    for m in  ${mod_list}; do
+        # modprobe -r "${m}"
+        echo "modprobe -r ${m}"
+    done
 } # End-unload_drm_kmods
 
 function load_vfio {

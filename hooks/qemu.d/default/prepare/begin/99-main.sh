@@ -10,7 +10,7 @@
 #     labeling, and the hook can allocate resources not managed by libvirt such
 #     as DRBD or missing bridges. This is called as:
 #-----------------------------------------------------------------------------
-function prepare_begin {
+function main {
     parse_xml
     if [[ -d "${TMP_CONFIG_PATH}/state" ]]; then
         rm -r "${TMP_CONFIG_PATH}/state"
@@ -37,6 +37,12 @@ function prepare_begin {
     #        passed through are bound to vfio
     # @TODO: Add check for virtualized graphics in XML if the only remaining
     #        GPU is to be passed to the VM
+    # @TODO: Check that all drives to be passed through are not also connected
+    #        to any PCI device that will be passed through
+    # @TODO: Check that any files used by the hypervisor aren't located on a
+    #        drive that will be passed through
+    # @TODO: Explore adding support for GPU passthrough on laptops with Optimius
+    #        or Prime
 
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
         set -x
@@ -68,6 +74,11 @@ function prepare_begin {
                 echo "${nfs_shares[@]}"
                 export_nfs_shares
             ;;
+            --enable-smb)
+                echo "Enabling the following SMB shares:"
+                echo "${smb_shares[@]}"
+                enable_smb_shares
+            ;;
             --pin-cpu-cores)
                 echo "Pinning CPU cores"
                 isolate_cores
@@ -94,4 +105,8 @@ function prepare_begin {
         echo "${HOSTDEV_LIST[@]}"
         unbind_pci_devices "${HOSTDEV_LIST[@]}"
     fi
+} # End-main
+
+function prepare_begin {
+    main
 } # End-prepare_begin

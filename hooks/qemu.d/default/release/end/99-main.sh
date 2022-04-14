@@ -11,7 +11,7 @@
 #     Then, after libvirt has released all resources, the hook is called again,
 #     since 0.9.0 , to allow any additional resource cleanup:
 #-----------------------------------------------------------------------------
-function release_end {
+function main {
     if [ -z "$(command -v "load_config_data")" ]; then
         echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" 1>&2
         exit 2
@@ -79,6 +79,11 @@ function release_end {
                 echo "${nfs_shares[@]}"
                 unexport_nfs_shares
             ;;
+            --enable-smb)
+                echo "Disabling the following SMB shares:"
+                echo "${smb_shares[@]}"
+                disable_smb_shares
+            ;;
             --pin-cpu-cores)
                 echo "Unpinning CPU cores"
                 release_cores
@@ -95,4 +100,8 @@ function release_end {
     if [ -d "${TMP_CONFIG_PATH}" ]; then
         rm -r "${TMP_CONFIG_PATH}"
     fi
+} # End-main
+
+function release_end {
+    main
 } # End-release_end
