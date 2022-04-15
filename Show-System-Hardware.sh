@@ -28,9 +28,10 @@ for g in $(ls -vd1 /sys/kernel/iommu_groups/*); do
 
         # Prints PCI device info
         echo -en "${PCI_FORMAT}"
-        while read line; do
-            echo -en "\t${line}\n"
-        done <<< $(lspci -nnks "${device}")
+        readarray -t lines <<< $(lspci -nnks "${device}")
+        for (( i = 0; i < ${#lines[@]}; i++ )); do
+            echo -en "\t${lines[$i]}\n"
+        done
 
         # Prints info of attached devices
         echo -en "${ATTACHED_DEVICES_FORMAT}"
