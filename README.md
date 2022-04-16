@@ -210,8 +210,10 @@ for other PCIe devices as well).
     [win10](./hooks/qemu.d/win10), [win10-gpu](./hooks/qemu.d/win10-gpu) and
     [vm-net](./hooks/network.d/vm-net).
 
- 6. Edit the VM configuration to include the pci devices you plan to
-    passthrough.
+ 6. Clone the VM without cloning the boot image (right click the VM in Virtual
+    Machine Manager then select clone and uncheck the box beside the boot image)
+    then edit the cloned VM configuration to include the pci devices you plan to
+    passthrough and remove any virtualized graphical outputs/devices.
 
     At this point the hardware should be passed through successfully
     if everything was configured properly. There will be a delay before any
