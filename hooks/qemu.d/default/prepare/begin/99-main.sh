@@ -30,7 +30,7 @@ function main {
         fi
     done
     if [ ${disable_host_graphics} -eq 1 ]; then
-        local config_flags=("--no-host-graphics" "${config_flags[@]}")
+        local config_flags=("${config_flags[@]}" "--no-host-graphics")
     fi
 
     # @TODO: Check that all devices in the iommu groups of the devices to be
