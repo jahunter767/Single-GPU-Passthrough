@@ -9,8 +9,8 @@
 function main {
     # set -x
     load_config_data
-    systemd-resolve --interface ${IF_NAME} --set-domain "~${NET_DOMAIN}" --set-dns "${IP_ADDR}"
-    firewall-cmd --change-interface=${IF_NAME} --zone=libvirt
+    systemd-resolve --interface "${IF_NAME}" --set-domain "~${NET_DOMAIN}" --set-dns "${IP_ADDR}"
+    firewall-cmd --change-interface="${IF_NAME}" --zone="${ZONE}"
 } # End-main
 
 function started_begin {

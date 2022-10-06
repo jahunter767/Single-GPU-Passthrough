@@ -3,6 +3,7 @@
 declare -g IF_NAME
 declare -g IP_ADDR
 declare -g NET_DOMAIN
+declare -g ZONE
 
 ##############################################################################
 # Extract device data from tmp folder structure
@@ -23,6 +24,11 @@ function load_config_data {
     local temp="${TMP_CONFIG_PATH}/hookData/network/domain/name.val"
     if [[ -f "${temp}" && -s "${temp}" ]]; then
         NET_DOMAIN="$(cat ${temp})"
+    fi
+
+    local temp="${TMP_CONFIG_PATH}/hookData/network/bridge/zone.val"
+    if [[ -f "${temp}" && -s "${temp}" ]]; then
+        ZONE="$(cat ${temp})"
     fi
 } # End-load_config_data
 
