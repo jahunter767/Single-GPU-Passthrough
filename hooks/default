@@ -32,6 +32,14 @@ mkdir -p "${HOOK_LOG_PATH}"
 # implemented in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}
 #
 # @TODO: Improve the speed that the XML is parsed
+# @TODO: Add support for specifying services to be exposed on each interface.
+#        Mockup:
+#        <description>
+#          services[ ssh nfs ]
+#          services[ dns dhcp ]
+#        </description>
+#        NB. The rows of services correspond to the list of interfaces in the
+#            order they appear in the XML.
 #-----------------------------------------------------------------------------
 function parse_xml {
     if [ -z "$(command -v "load_config_data")" ]; then

@@ -9,6 +9,22 @@ the basics to keep this short.
 
 1. All the other script improvements scattered around the hook scripts
     (Search "@TODO" to find them).
+2. Add support for non PCIe device Host Device passthrough
+3. Handle empty flags
+4. Add support for detecting the network a VM is attached to and its
+    configuration (This eliminates the need to specify the network details in
+    the VM hooks)
+5. Add support for listing services to expose in the description so users don't
+    need to edit the hooks
+6. Add checks for file existence (in the state folder) before trying to read from
+    them
+7. Either:
+   a. update unloading of drm related kernel modules to not rely on the presence
+      of the drm module in lsmod output
+   b. find another way to identify them from the main drm module/driver
+   c. save the gpu drivers to the relevant location in the state folder and
+      unload the modules right after (looks the most promising right now)
+8. Add checks to see if requested hardware is in use by another VM
 
 ## Credits
 
