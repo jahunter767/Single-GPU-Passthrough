@@ -3,8 +3,14 @@
 # Declaring global variables
 declare -ga VFIO_KMODS
 declare -ga DRIVE_LIST
-declare -ga HOSTDEV_LIST
 declare -ga CPU_THREAD_LIST
+
+declare -ga HOSTDEV_LIST_ALL
+declare -ga HOSTDEV_LIST_PCI
+declare -ga HOSTDEV_LIST_USB
+declare -ga HOSTDEV_LIST_SCSI
+declare -ga HOSTDEV_LIST_SCSI_HOST
+declare -ga HOSTDEV_LIST_MDEV
 
 VFIO_KMODS=("vfio" "vfio_iommu_type1" "vfio_pci")
 
@@ -62,15 +68,67 @@ function get_drive_path {
     fi
 } # End-get_drive_path
 
-function get_domain_id {
+function get_hostdev_data {
     local config_dev_path="${1}"
-    local addr="${config_dev_path}/source/address"
-    local domain="$(cat "${addr}/domain.val")"
-    local bus="$(cat "${addr}/bus.val")"
-    local slot="$(cat "${addr}/slot.val")"
-    local func="$(cat "${addr}/function.val")"
-    echo -n "${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
-} # End-get_domain_id
+    local dev_type="$(cat "${config_dev_path}/type.val")"
+
+    case "${dev_type}" in
+        pci)
+            local addr="${config_dev_path}/source/address"
+            local domain="$(cat "${addr}/domain.val")"
+            local bus="$(cat "${addr}/bus.val")"
+            local slot="$(cat "${addr}/slot.val")"
+            local func="$(cat "${addr}/function.val")"
+            echo -n "PCI:${domain#0x}:${bus#0x}:${slot#0x}.${func#0x}"
+            ;;
+        usb)
+            local vendor="$(cat "${config_dev_path}/source/vendor/id.val")"
+            local product="$(cat "${config_dev_path}/source/product/id.val")"
+            echo -n "USB:${vendor#0x}:${product#0x}"
+            ;;
+        scsi)
+            if [[ -s "${config_dev_path}/source/protocol.val" ]]; then
+                # <source protocol='iscsi' name='iqn.2014-08.com.example:iscsi-nopool/1'>
+                #   <host name='example.com' port='3260'/>
+                #   <auth username='myuser'>
+                #     <secret type='iscsi' usage='libvirtiscsi'/>
+                #   </auth>
+                #   <initiator>
+                #     <iqn name='iqn.2020-07.com.example:test'/>
+                #   </initiator>
+                # </source>
+                local protocol="$(cat "${config_dev_path}/source/protocol.val")"
+                local user="$(cat "${config_dev_path}/source/auth/username.val")"
+                local hostname="$(cat "${config_dev_path}/source/host/name.val")"
+                local port="$(cat "${config_dev_path}/source/host/port.val")"
+                local name="$(cat "${config_dev_path}/source/name.val")"
+                echo -n "SCSI:${protocol}://${user}:@${hostname}:${port}/${name}"
+            else
+                # <source>
+                #   <adapter name='scsi_host0'/>
+                #   <address bus='0' target='0' unit='0'/>
+                # </source>
+                local adapter="$(cat "${config_dev_path}/source/adapter/name.val")"
+                local bus="$(cat "${config_dev_path}/source/address/bus.val")"
+                local target="$(cat "${config_dev_path}/source/address/target.val")"
+                local unit="$(cat "${config_dev_path}/source/address/unit.val")"
+                echo -n "SCSI:${adapter}@${bus}:${target}:${unit}"
+            fi
+            ;;
+        scsi_host)
+            local protocol="$(cat "${config_dev_path}/source/protocol.val")"
+            local wwpn="$(cat "${config_dev_path}/source/wwpn.val")"
+            echo -n "SCSI_HOST:${protocol}://${wwpn}"
+            ;;
+        mdev)
+            local addr="$(cat "${config_dev_path}/source/address/uuid.val")"
+            echo -n "MDEV:${addr}"
+            ;;
+        *)
+            echo "Unknown type of hostdev source: ${dev_type}" >2
+            ;;
+    esac
+} # End-get_hostdev_data
 
 function get_host_thread {
     local config_dev_path="${1}"
@@ -79,14 +137,50 @@ function get_host_thread {
 
 function load_config_data {
     echo "Reading data from the XML"
-    readarray -t DRIVE_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
-    readarray -t HOSTDEV_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_domain_id")"
-    readarray -t CPU_THREAD_LIST <<< "$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
+    local drive_lst="$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
+    readarray -d " " DRIVE_LIST <<< "${drive_lst}"
+    DRIVE_LIST=(${DRIVE_LIST[@]%[\w\n]})
+
+    local thread_lst="$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
+    readarray -d " " CPU_THREAD_LIST <<< "${thread_lst}"
+    CPU_THREAD_LIST=(${CPU_THREAD_LIST[@]%[\w\n]})
+
+    local hostdev_lst="$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_hostdev_data")"
+    readarray -d " " HOSTDEV_LIST_ALL <<< "${hostdev_lst}"
+    HOSTDEV_LIST_ALL=(${HOSTDEV_LIST_ALL[@]%[\w\n]})
+    for host_dev in ${HOSTDEV_LIST_ALL[@]}; do
+        case "${host_dev}" in
+            PCI:*)
+                HOSTDEV_LIST_PCI[${#HOSTDEV_LIST_PCI[@]}]="${host_dev#PCI:}"
+                ;;
+            USB:*)
+                HOSTDEV_LIST_USB[${#HOSTDEV_LIST_USB[@]}]="${host_dev#USB:}"
+                ;;
+            SCSI:*)
+                HOSTDEV_LIST_SCSI[${#HOSTDEV_LIST_SCSI[@]}]="${host_dev#SCSI:}"
+                ;;
+            SCSI_HOST:*)
+                HOSTDEV_LIST_SCSI_HOST[${#HOSTDEV_LIST_SCSI_HOST[@]}]="${host_dev#SCSI_HOST:}"
+                ;;
+            MDEV:*)
+                HOSTDEV_LIST_MDEV[${#HOSTDEV_LIST_MDEV[@]}]="${host_dev#MDEV:}"
+                ;;
+            *)
+                echo "Unknown hostdev: ${host_dev}"
+                ;;
+        esac
+    done
 
     # Prints out the data in each array
     declare -p DRIVE_LIST
-    declare -p HOSTDEV_LIST
     declare -p CPU_THREAD_LIST
+
+    declare -p HOSTDEV_LIST_ALL
+    declare -p HOSTDEV_LIST_PCI
+    declare -p HOSTDEV_LIST_USB
+    declare -p HOSTDEV_LIST_SCSI
+    declare -p HOSTDEV_LIST_SCSI_HOST
+    declare -p HOSTDEV_LIST_MDEV
 } # End-load_config_data
 
 ##############################################################################

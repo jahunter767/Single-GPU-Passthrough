@@ -25,10 +25,10 @@ function main {
         set -x
     fi
 
-    if [[ ${#HOSTDEV_LIST[@]} -gt 0 && -n "${HOSTDEV_LIST[@]}" ]]; then
+    if [[ ${#HOSTDEV_LIST_PCI[@]} -gt 0 && -n "${HOSTDEV_LIST_PCI[@]}" ]]; then
         echo "Rebinding the following PCI devices to the host:"
-        echo "${HOSTDEV_LIST[@]}"
-        bind_pci_devices "${HOSTDEV_LIST[@]}"
+        echo "${HOSTDEV_LIST_PCI[@]}"
+        bind_pci_devices "${HOSTDEV_LIST_PCI[@]}"
         echo "Loading DRM (Direct Rendering Manager) kernel module"
         load_drm_kmods
         # echo "Unloading VFIO modules"
@@ -47,7 +47,7 @@ function main {
     # devices only show up in /sys/class/drm after that
     local enable_host_graphics=1
     for r in $(get_gpu_with_output_list); do
-        if [[ ! "${HOSTDEV_LIST[@]}" =~ "${r}" ]]; then
+        if [[ ! "${HOSTDEV_LIST_PCI[@]}" =~ "${r}" ]]; then
             enable_host_graphics=0
         fi
     done

@@ -9,22 +9,23 @@ the basics to keep this short.
 
 1. All the other script improvements scattered around the hook scripts
     (Search "@TODO" to find them).
-2. Add support for non PCIe device Host Device passthrough
-3. Handle empty flags
-4. Add support for detecting the network a VM is attached to and its
+2. Handle empty flags
+3. Add support for detecting the network a VM is attached to and its
     configuration (This eliminates the need to specify the network details in
     the VM hooks)
-5. Add support for listing services to expose in the description so users don't
+4. Add support for listing services to expose in the description so users don't
     need to edit the hooks
-6. Add checks for file existence (in the state folder) before trying to read from
+5. Add checks for file existence (in the state folder) before trying to read from
     them
-7. Either:
+6. Either:
    a. update unloading of drm related kernel modules to not rely on the presence
       of the drm module in lsmod output
    b. find another way to identify them from the main drm module/driver
    c. save the gpu drivers to the relevant location in the state folder and
       unload the modules right after (looks the most promising right now)
-8. Add checks to see if requested hardware is in use by another VM
+7. Add checks to see if requested hardware is in use by another VM
+8. Fix issue with shutting down the desktop environment when using KDE on
+   Wayland (seems like kwayland needs to be killed)
 
 ## Credits
 
@@ -74,6 +75,22 @@ to setup my own system for this:
     more dynamic. The idea to add custom flags in the description of the XML
     to allow changing the scripts run without needing to edit the scripts
     directly was from his scripts.
+
+## Testing the Scripts
+
+If you want to try the scripts before deploying them you can change the path
+of the tmp config folder and log file from in the
+[hooks/default](hooks/default) script then run:
+
+`./hooks/${domain} ${guest_name} ${hook_name} ${state_name} - < ${test_xml}`
+
+where ${domain} represents one of the 4 main scripts at the root of the hooks
+folder (qemu, network, lxc, daemon) and ${test_xml} is just a libvirt xml file.
+
+eg.
+`./hooks/qemu win10-gpu prepare begin - < test-qemu.xml`
+`./hooks/network vm-net started begin - < test-network.xml`
+`./hooks/network vm-net port-created begin - < test-network-port-created.xml`
 
 ## Disclaimers
 

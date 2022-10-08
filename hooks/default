@@ -20,9 +20,8 @@ HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
 # TMP_CONFIG_PATH="/tmp/libvirt-xml/${DOMAIN_NAME}/${GUEST_NAME}"
 TMP_CONFIG_PATH="tmp/libvirt-xml/${DOMAIN_NAME}/${GUEST_NAME}"
 # HOOK_LOG_PATH="/var/log/libvirt/hooks/${DOMAIN_NAME}"
-HOOK_LOG_PATH="${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}"
-# LOG_FILE="${HOOK_LOG_PATH}/${GUEST_NAME}.log"
-LOG_FILE="${HOOK_LOG_PATH}/vm.log"
+HOOK_LOG_PATH="var/log/libvirt/hooks/${DOMAIN_NAME}"
+LOG_FILE="${HOOK_LOG_PATH}/${GUEST_NAME}.log"
 
 mkdir -p "${HOOK_LOG_PATH}"
 

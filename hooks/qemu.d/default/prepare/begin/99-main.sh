@@ -25,7 +25,7 @@ function main {
     # to the VM
     local disable_host_graphics=1
     for r in $(get_gpu_with_output_list); do
-        if [[ ! "${HOSTDEV_LIST[@]}" =~ "${r}" ]]; then
+        if [[ ! "${HOSTDEV_LIST_PCI[@]}" =~ "${r}" ]]; then
             local disable_host_graphics=0
         fi
     done
@@ -98,12 +98,12 @@ function main {
         unmount_drives "${DRIVE_LIST[@]}"
     fi
 
-    if [[ ${#HOSTDEV_LIST[@]} -gt 0 && -n "${HOSTDEV_LIST[@]}" ]]; then
+    if [[ ${#HOSTDEV_LIST_PCI[@]} -gt 0 && -n "${HOSTDEV_LIST_PCI[@]}" ]]; then
         # echo "Loading VFIO modules"
         # load_vfio
         echo "Unbinding the following PCI devices from their drivers:"
-        echo "${HOSTDEV_LIST[@]}"
-        unbind_pci_devices "${HOSTDEV_LIST[@]}"
+        echo "${HOSTDEV_LIST_PCI[@]}"
+        unbind_pci_devices "${HOSTDEV_LIST_PCI[@]}"
     fi
 } # End-main
 
