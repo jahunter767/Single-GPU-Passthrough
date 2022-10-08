@@ -33,43 +33,53 @@
       <boot order="2"/>
       <address type="drive" controller="0" bus="0" target="0" unit="1"/>
     </disk>
+
     <disk type="block" device="disk">
       <driver name="qemu" type="raw" cache="none" io="native"/>
-      <source dev="/dev/disk/by-id/ata-XXXXXXXXXXX-XXXXXX_XXXXXXXX"/>
+      <source dev="/dev/disk/by-id/ata-1XXXXXXXXXX-XXXXXX_XXXXXXXX"/>
       <target dev="sdb" bus="sata"/>
       <address type="drive" controller="0" bus="0" target="0" unit="2"/>
     </disk>
+    <disk type="block" device="disk">
+      <driver name="qemu" type="raw" cache="none" io="native"/>
+      <source dev="/dev/disk/by-id/ata-2XXXXXXXXXX-XXXXXX_XXXXXXXX"/>
+      <target dev="sdc" bus="sata"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="3"/>
+    </disk>
+
     <disk type="file" device="cdrom">
       <driver name="qemu" type="raw"/>
       <source file="/mnt/virt/ISOs/Windows/11/2022-03-02/Win11_English_x64v1.iso"/>
-      <target dev="sdc" bus="sata"/>
-      <readonly/>
-      <boot order="3"/>
-      <address type="drive" controller="0" bus="0" target="0" unit="3"/>
-    </disk>
-    <disk type="file" device="cdrom">
-      <driver name="qemu" type="raw"/>
-      <source file="/mnt/virt/ISOs/Windows/Drivers/virtio-win-0.1.215.iso"/>
       <target dev="sdd" bus="sata"/>
       <readonly/>
-      <boot order="4"/>
+      <boot order="3"/>
       <address type="drive" controller="0" bus="0" target="0" unit="4"/>
     </disk>
     <disk type="file" device="cdrom">
       <driver name="qemu" type="raw"/>
-      <source file="/mnt/virt/ISOs/Linux/Fedora/35/Fedora-KDE-Live-x86_64-35-1.2.iso"/>
+      <source file="/mnt/virt/ISOs/Windows/Drivers/virtio-win-0.1.215.iso"/>
       <target dev="sde" bus="sata"/>
       <readonly/>
-      <boot order="1"/>
+      <boot order="4"/>
       <address type="drive" controller="0" bus="0" target="0" unit="5"/>
+    </disk>
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/mnt/virt/ISOs/Linux/Fedora/35/Fedora-KDE-Live-x86_64-35-1.2.iso"/>
+      <target dev="sdf" bus="sata"/>
+      <readonly/>
+      <boot order="1"/>
+      <address type="drive" controller="0" bus="0" target="0" unit="6"/>
     </disk>
 
     <controller type="usb" index="0" model="qemu-xhci" ports="15">
       <address type="pci" domain="0x0000" bus="0x02" slot="0x00" function="0x0"/>
     </controller>
+
     <controller type="sata" index="0">
       <address type="pci" domain="0x0000" bus="0x00" slot="0x1f" function="0x2"/>
     </controller>
+
     <controller type="pci" index="0" model="pcie-root"/>
     <controller type="pci" index="1" model="pcie-root-port">
       <model name="pcie-root-port"/>
@@ -116,5 +126,51 @@
       </source>
       <address type="pci" domain="0x0000" bus="0x08" slot="0x00" function="0x0"/>
     </hostdev>
+
+    <hostdev mode="subsystem" type="usb" managed="yes">
+      <source>
+        <vendor id="0x8087"/>
+        <product id="0x0025"/>
+      </source>
+      <address type="usb" bus="0" port="4"/>
+    </hostdev>
+
+    <hostdev mode='subsystem' type='scsi' sgio='filtered' rawio='yes'>
+      <source>
+        <adapter name='scsi_host0'/>
+        <address bus='0' target='0' unit='0'/>
+      </source>
+      <readonly/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </hostdev>
+    <hostdev mode='subsystem' type='scsi'>
+      <source protocol='iscsi' name='iqn.2014-08.com.example:iscsi-nopool/1'>
+        <host name='example.com' port='3260'/>
+        <auth username='myuser'>
+          <secret type='iscsi' usage='libvirtiscsi'/>
+        </auth>
+        <initiator>
+          <iqn name='iqn.2020-07.com.example:test'/>
+        </initiator>
+      </source>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </hostdev>
+
+    <hostdev mode='subsystem' type='scsi_host'>
+      <source protocol='vhost' wwpn='naa.50014057667280d8'/>
+    </hostdev>
+
+    <hostdev mode='subsystem' type='mdev' model='vfio-pci'>
+      <source>
+        <address uuid='c2177883-f1bb-47f0-914d-32a22e3a8804'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='mdev' model='vfio-ccw'>
+      <source>
+        <address uuid='9063cba3-ecef-47b6-abcf-3fef4fdcad85'/>
+      </source>
+      <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0001'/>
+    </hostdev>
+
   </devices>
 </domain>
