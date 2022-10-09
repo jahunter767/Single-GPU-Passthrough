@@ -14,6 +14,7 @@
 #-----------------------------------------------------------------------------
 function main {
     load_config_data
+    load_description_configs
     echo "start_begin:     Pass"
 } # End-main
 

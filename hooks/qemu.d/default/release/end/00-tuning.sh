@@ -11,7 +11,7 @@ function release_cores {
     for vm in $(ls -d1 ${TMP_CONFIG_PATH}/../*); do
         if [[ "$(realpath ${vm})" != "${TMP_CONFIG_PATH}" ]]; then
             local pinned_threads="${pinned_threads} \
-                $(get_hostdev_list "${vm}/domain/cputune/vcpupin" \
+                $(tag_list_to_array "${vm}/domain/cputune/vcpupin" \
                     "get_host_thread") "
         fi
     done

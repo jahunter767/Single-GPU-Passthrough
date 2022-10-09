@@ -10,6 +10,10 @@ declare -g HOOK_FOLDER
 declare -g TMP_CONFIG_PATH
 declare -g LOG_FILE
 
+declare -ga CONFIG_FLAGS
+declare -ga HOST_SERVICES
+declare -ga INTERNAL_SERVICES
+
 DOMAIN_NAME="$(basename "${0}")"
 GUEST_NAME="${1}"
 HOOK_NAME="${2}"
@@ -17,13 +21,24 @@ STATE_NAME="${3}"
 MISC="${@:4}"
 
 HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
-# TMP_CONFIG_PATH="/tmp/libvirt-xml/${DOMAIN_NAME}/${GUEST_NAME}"
-TMP_CONFIG_PATH="tmp/libvirt-xml/${DOMAIN_NAME}/${GUEST_NAME}"
+#TMP_CONFIG_PATH_ROOT="/tmp/libvirt-xml"
+TMP_CONFIG_PATH_ROOT="tmp/libvirt-xml"
+TMP_CONFIG_PATH="${TMP_CONFIG_PATH_ROOT}/${DOMAIN_NAME}/${GUEST_NAME}"
 # HOOK_LOG_PATH="/var/log/libvirt/hooks/${DOMAIN_NAME}"
 HOOK_LOG_PATH="var/log/libvirt/hooks/${DOMAIN_NAME}"
 LOG_FILE="${HOOK_LOG_PATH}/${GUEST_NAME}.log"
 
 mkdir -p "${HOOK_LOG_PATH}"
+
+#-----------------------------------------------------------------------------
+# Writes messages to the log file for the guest
+#-----------------------------------------------------------------------------
+
+function log {
+    for line in "${@}"; do
+        echo "${line}" 1>&2
+    done
+} # End-log
 
 #-----------------------------------------------------------------------------
 # Parse XML and create a file system in tmp representing its structure then
@@ -42,7 +57,7 @@ mkdir -p "${HOOK_LOG_PATH}"
 #-----------------------------------------------------------------------------
 function parse_xml {
     if [ -z "$(command -v "load_config_data")" ]; then
-        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" 1>&2
+        log "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
         exit 2
     fi
 
@@ -90,7 +105,7 @@ function parse_xml {
                 parent_tag_path="${parent_tag_path%/${tag_stack[-1]}}"
                 unset tag_stack[-1]
             else
-                echo "ERROR: Unexpected closing tag found: ${xml_line}" 1>&2
+                log "ERROR: Unexpected closing tag found: ${xml_line}"
                 exit 2
             fi
 
@@ -101,7 +116,7 @@ function parse_xml {
 
         elif [[ "${xml_line}" =~ ([\<\>]) ]]; then
             # If it has angle brackets but isn't a tag
-            echo "ERROR: Failed to parse the line: ${xml_line}" 1>&2
+            log "ERROR: Failed to parse the line: ${xml_line}"
             exit 2
         fi
 
@@ -155,12 +170,93 @@ function parse_xml {
     load_config_data
 } # End-parse_xml
 
-function parse_description_args {
-    local desc="${1}"
-    read args <<< $(echo "${desc}" |
-        grep -oPm1 "(args\[)([[:space:]]*--[[:word:]-]+)+([[:space:]]*\])")
-    echo "${args}" | grep -oP "(--[[:word:]-]+)"
-} # End-parse_description_args
+# Extracts data from the set of sibling tags with the same name and converts
+# the data into an array
+function tag_list_to_array {
+    declare -a temp_list
+    local tag_path="${1}"
+    local getName="${2}"
+    local type="$(basename "${tag_path}")"
+    if [ -d "${tag_path}" ]; then
+        if [ -d "${tag_path}/${type}-1" ]; then
+            for host_dev in ${tag_path}/${type}-*; do
+                local name="$(${getName} ${host_dev})"
+                if [ -n "${name}" ]; then
+                    temp_list[${#temp_list[@]}]="${name}"
+                fi
+            done
+        else
+            local name="$(${getName} ${tag_path})"
+            if [ -n "${name}" ]; then
+                temp_list[${#temp_list[@]}]="${name}"
+            fi
+        fi
+    fi
+
+    echo "${temp_list[@]}"
+} # End-tag_list_to_array
+
+function parse_description_array {
+    local array_name="${1}"
+    local element_regex="${2}"
+    local array_count="${3}"
+
+    local desc="${TMP_CONFIG_PATH}/domain/description/value"
+    local element_lst_regex="((${element_regex})*([[:space:]]+${element_regex})*)"
+    local array_regex="(${array_name}\[[[:space:]]*)${element_lst_regex}([[:space:]]*\])"
+    declare -a result
+
+    if [[ ${array_count} == 1 ]]; then
+        local flags="-m 1"
+    else
+        local flags=""
+    fi
+
+    while read array; do
+        if [[ -n "${array}" ]]; then
+            shopt -s extglob
+            array="${array//[[:space:]]+([[:space:]])/ }"
+            array="${array##*\[*([[:space:]])}"
+            array="${array%%*([[:space:]])\]*}"
+            shopt -u extglob
+            echo "${array}"
+        fi
+    done <<< $(grep -oP ${flags} ^"[[:space:]]*${array_regex}[[:space:]]*"$ \
+        "${desc}")
+} # End-parse_description_array
+
+
+function parse_description_configs {
+    local hyphenated_word_regexp="[[:word:]]+(-[[:word:]]+)*"
+    local arg_regex="(--${hyphenated_word_regexp})"
+    parse_description_array "args" "${arg_regex}" 1 > \
+        "${TMP_CONFIG_PATH}/state/args.val"
+
+    local host_service_regex="(${hyphenated_word_regexp}:${hyphenated_word_regexp}(,${hyphenated_word_regexp})*)"
+    parse_description_array "host_services" "${host_service_regex}" 1 > \
+        "${TMP_CONFIG_PATH}/state/host_services.val"
+
+    local service_regex="(${hyphenated_word_regexp})"
+    parse_description_array "internal_services" "${service_regex}" > \
+        "${TMP_CONFIG_PATH}/state/internal_services.val"
+
+    load_description_configs
+} # End-parse_description_configs
+
+function load_description_configs {
+    echo "Reading data from the description"
+    readarray -td " " CONFIG_FLAGS <<< $(cat "${TMP_CONFIG_PATH}/state/args.val")
+    CONFIG_FLAGS=(${CONFIG_FLAGS[@]%\n})
+
+    readarray -td " " HOST_SERVICES <<< $(cat "${TMP_CONFIG_PATH}/state/host_services.val")
+    HOST_SERVICES=(${HOST_SERVICES[@]%\n})
+
+    readarray -t INTERNAL_SERVICES <<< $(cat "${TMP_CONFIG_PATH}/state/internal_services.val")
+
+    declare -p CONFIG_FLAGS
+    declare -p HOST_SERVICES
+    declare -p INTERNAL_SERVICES
+} # End-load_description_configs
 
 ##############################################################################
 # Read in all the functions needed for the VM. Reads in the default scripts
@@ -191,6 +287,6 @@ function include_functions {
 
 echo "--------------NEXT--------------" >> "${LOG_FILE}"
 echo "$(date): ${0} ${@}" >> "${LOG_FILE}"
-include_functions "${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
-include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/default/${HOOK_NAME}/${STATE_NAME}" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
-include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}" >> "${LOG_FILE}" 2> >(tee -a /dev/stderr)
+include_functions "${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" >> "${LOG_FILE}" 2>> >(tee -a /dev/stderr)
+include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/default/${HOOK_NAME}/${STATE_NAME}" >> "${LOG_FILE}" 2>> >(tee -a /dev/stderr)
+include_functions "${HOOK_FOLDER}/${DOMAIN_NAME}.d/${GUEST_NAME}/${HOOK_NAME}/${STATE_NAME}" >> "${LOG_FILE}" 2>> >(tee -a /dev/stderr)

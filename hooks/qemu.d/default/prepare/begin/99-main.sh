@@ -15,11 +15,10 @@ function main {
     if [[ -d "${TMP_CONFIG_PATH}/state" ]]; then
         rm -r "${TMP_CONFIG_PATH}/state"
     fi
-    mkdir -p ${TMP_CONFIG_PATH}/state/{drives,pci-devs}
+    mkdir -p ${TMP_CONFIG_PATH}/state/{drives,pci-devs,interfaces}
 
-    local desc_val="$(cat "${TMP_CONFIG_PATH}/domain/description/value")"
-    readarray config_flags <<< $(parse_description_args "${desc_val}")
-    echo "${config_flags[@]}" > "${TMP_CONFIG_PATH}/state/args.val"
+    parse_description_configs
+    local config_flags=(${CONFIG_FLAGS[@]})
 
     # Checks if all the current GPU's with graphical outputs are to be passed
     # to the VM
@@ -30,7 +29,7 @@ function main {
         fi
     done
     if [ ${disable_host_graphics} -eq 1 ]; then
-        local config_flags=("${config_flags[@]}" "--no-host-graphics")
+        local config_flags=(${config_flags[@]} "--no-host-graphics")
     fi
 
     # @TODO: Check that all devices in the iommu groups of the devices to be
@@ -45,6 +44,7 @@ function main {
     #        or Prime
 
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
+        echo "Debugging enabled"
         set -x
     fi
 
@@ -62,12 +62,12 @@ function main {
                 unload_drm_kmods
             ;;
             --enable-internal-services)
-                echo "Adding ${internal_services[*]} services to ${internal_zone} firewall zone"
-                enable_services ${internal_zone} ${internal_services[*]}
+                echo "Enabling Internal Services"
+                enable_internal_services
             ;;
             --enable-external-services)
-                echo "Adding ${external_services[*]} services to ${external_zone} firewall zone"
-                enable_services ${external_zone} ${external_services[*]}
+                echo "Enabling External Services"
+                enable_external_services
             ;;
             --enable-nfs)
                 echo "Exporting the following NFS shares to the VM:"
@@ -84,10 +84,10 @@ function main {
                 isolate_cores
             ;;
             --debug)
-                echo "Debugging was enabled"
+                # Pass
             ;;
             *)
-                echo "Warning: Undefined tag: ${f}" 1>&2
+                log "WARNING: Undefined tag: ${f}"
             ;;
         esac
     done

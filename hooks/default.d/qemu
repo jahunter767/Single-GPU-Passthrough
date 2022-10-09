@@ -4,6 +4,7 @@
 declare -ga VFIO_KMODS
 declare -ga DRIVE_LIST
 declare -ga CPU_THREAD_LIST
+declare -ga INTERFACE_LIST
 
 declare -ga HOSTDEV_LIST_ALL
 declare -ga HOSTDEV_LIST_PCI
@@ -15,16 +16,16 @@ declare -ga HOSTDEV_LIST_MDEV
 VFIO_KMODS=("vfio" "vfio_iommu_type1" "vfio_pci")
 
 # Space separated list of host threads not pinned by default. Leaving it blank
-# assumes that all threads are not pinned
+# assumes that no threads are pinned
 default_user_allowedCPUs=""
 default_system_allowedCPUs=""
 default_init_allowedCPUs=""
 
-internal_zone=("libvirt")
-internal_services=("")
+# internal_zone=("libvirt")
+# internal_services=("")
 
-external_services=("")
-external_zone=("")
+# external_services=("")
+# external_zone=("")
 
 nfs_shares=("")
 nfs_user="username"
@@ -36,30 +37,6 @@ smb_shares=("")
 ##############################################################################
 # Extract device data from tmp folder structure
 ##############################################################################
-
-function get_hostdev_list {
-    declare -a temp_list
-    local dev_path="${1}"
-    local getName="${2}"
-    local type="$(basename "${dev_path}")"
-    if [ -d "${dev_path}" ]; then
-        if [ -d "${dev_path}/${type}-1" ]; then
-            for host_dev in ${dev_path}/${type}-*; do
-                local name="$(${getName} ${host_dev})"
-                if [ -n "${name}" ]; then
-                    temp_list[${#temp_list[@]}]="${name}"
-                fi
-            done
-        else
-            local name="$(${getName} ${dev_path})"
-            if [ -n "${name}" ]; then
-                temp_list[${#temp_list[@]}]="${name}"
-            fi
-        fi
-    fi
-
-    echo "${temp_list[@]}"
-} # End-get_hostdev_list
 
 function get_drive_path {
     local config_dev_path="${1}"
@@ -125,7 +102,7 @@ function get_hostdev_data {
             echo -n "MDEV:${addr}"
             ;;
         *)
-            echo "Unknown type of hostdev source: ${dev_type}" >2
+            log "WARNING: Unknown type of hostdev source: ${dev_type}"
             ;;
     esac
 } # End-get_hostdev_data
@@ -135,17 +112,94 @@ function get_host_thread {
     cat "${config_dev_path}/cpuset.val"
 } # End-get_host_thread
 
+function get_interface {
+    local config_dev_path="${1}"
+    local type="$(cat "${config_dev_path}/type.val")"
+    local mac_addr="$(cat "${config_dev_path}/mac/address.val")"
+
+    case "${type}" in
+        network)
+            # <interface type="network">
+            #   <mac address="FF:FF:FF:FF:FF:FF"/>
+            #   <source network="vm-net"/>
+            #   <model type="virtio"/>
+            #   <link state="up"/>
+            #   <address type="pci" domain="0x0000" bus="0x01" slot="0x00" function="0x0"/>
+            # </interface>
+            local network="$(cat "${config_dev_path}/source/network.val")"
+            echo "${type}://${mac_addr}@${network}"
+            ;;
+        bridge)
+            # <interface type="bridge">
+            #   <mac address="52:54:00:2e:ba:2f"/>
+            #   <source bridge="virtbr1"/>
+            #   <model type="e1000e"/>
+            #   <address type="pci" domain="0x0000" bus="0x04" slot="0x00" function="0x0"/>
+            # </interface>
+            local bridge="$(cat "${config_dev_path}/source/bridge.val")"
+            echo "${type}://${mac_addr}@${bridge}"
+            ;;
+        direct)
+            # <interface type="direct">
+            #   <mac address="52:54:00:23:a6:e0"/>
+            #   <source dev="virtbr2" mode="bridge"/>
+            #   <model type="e1000e"/>
+            #   <address type="pci" domain="0x0000" bus="0x04" slot="0x00" function="0x0"/>
+            # </interface>
+            local interface_dev="$(cat "${config_dev_path}/source/dev.val")"
+            echo "${type}://${mac_addr}@${interface_dev}"
+            ;;
+        user)
+            # @TODO add support for this and other types of interfaces
+            ;;
+        vdpa)
+            # Pass
+            ;;
+        hostdev)
+            # Pass
+            ;;
+        mcast)
+            # Pass
+            ;;
+        server)
+            # Pass
+            ;;
+        client)
+            # Pass
+            ;;
+        udp)
+            # Pass
+            ;;
+        null)
+            # Pass
+            ;;
+        vds)
+            # Pass
+            ;;
+        vhostuser)
+            # Pass
+            ;;
+        *)
+            log "WARNING: Unknown interface type: ${type}"
+            ;;
+    esac
+} # End-get_interface
+
 function load_config_data {
     echo "Reading data from the XML"
-    local drive_lst="$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
+    local drive_lst="$(tag_list_to_array "${TMP_CONFIG_PATH}/domain/devices/disk" "get_drive_path")"
     readarray -d " " DRIVE_LIST <<< "${drive_lst}"
     DRIVE_LIST=(${DRIVE_LIST[@]%[\w\n]})
 
-    local thread_lst="$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
+    local thread_lst="$(tag_list_to_array "${TMP_CONFIG_PATH}/domain/cputune/vcpupin" "get_host_thread")"
     readarray -d " " CPU_THREAD_LIST <<< "${thread_lst}"
     CPU_THREAD_LIST=(${CPU_THREAD_LIST[@]%[\w\n]})
 
-    local hostdev_lst="$(get_hostdev_list "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_hostdev_data")"
+    local interface_lst="$(tag_list_to_array "${TMP_CONFIG_PATH}/domain/devices/interface" "get_interface")"
+    readarray -d " " INTERFACE_LIST <<< "${interface_lst}"
+    INTERFACE_LIST=(${INTERFACE_LIST[@]%[\w\n]})
+
+    local hostdev_lst="$(tag_list_to_array "${TMP_CONFIG_PATH}/domain/devices/hostdev" "get_hostdev_data")"
     readarray -d " " HOSTDEV_LIST_ALL <<< "${hostdev_lst}"
     HOSTDEV_LIST_ALL=(${HOSTDEV_LIST_ALL[@]%[\w\n]})
     for host_dev in ${HOSTDEV_LIST_ALL[@]}; do
@@ -174,6 +228,7 @@ function load_config_data {
     # Prints out the data in each array
     declare -p DRIVE_LIST
     declare -p CPU_THREAD_LIST
+    declare -p INTERFACE_LIST
 
     declare -p HOSTDEV_LIST_ALL
     declare -p HOSTDEV_LIST_PCI
@@ -253,19 +308,23 @@ function attach_pci_dev {
 
     # Resetting the pci device
     if [[ -e "${dev_path}/reset" ]]; then
-        echo 1 > "${dev_path}/reset"
+        #echo 1 > "${dev_path}/reset"
+        echo "1 > ${dev_path}/reset"
     else
-        echo "Notice: This pci device is not directly resettable. If the \
-            VM fails to start, try starting it without passing through \
-            this device: ${device}" 1>&2
+        log "Notice: This pci device is not directly resettable. If the VM fails to start," \
+            "        try starting it without passing through fails to start, try starting" \
+            "        it without passing through this device: ${device}" \
+            "        If the device fails to rebind to the host properly after shutting" \
+            "        down the VM then it may have some hardware or software bugs preventing" \
+            "        it from recovering from the \"powered down\" state the VM left it in"
     fi
 
     # Binding the pci device to the new driver
     if [[ ! -d "${driver_path}/${device}" ]]; then
         if [[ -d "${dev_path}/driver" ]]; then
-            echo -e "ERROR: This pci device is still bound to another driver.\n\
-                \tDevice: ${device}\n\
-                \tDriver: $(basename "$(realpath "${dev_path}/driver")")" 1>&2
+            log "ERROR: This pci device is still bound to another driver." \
+                "       Device: ${device}" \
+                "       Driver: $(basename "$(realpath "${dev_path}/driver")")"
             exit 2
         fi
 
@@ -288,8 +347,8 @@ function attach_pci_dev {
                 #echo "${device} > ${driver_path}/bind"
             ;;
             *)
-                echo -e "ERROR: The command below failed with code ${pred}:\n\
-                    echo \"${device}\" > \"${driver_path}/bind\"" 1>&2
+                log "ERROR: The command below failed with code ${pred}:" \
+                    "       echo \"${device}\" > \"${driver_path}/bind\""
                 exit 2
             ;;
         esac
@@ -309,7 +368,7 @@ function traverse_pci_dev_tree {
     if [ -n "$(command -v "${action}")" ]; then
         "${action}" "${curr_node}"
     else
-        echo "ERROR: PCI ACTION UNDEFINED" 1>&2
+        log "ERROR: PCI ACTION UNDEFINED"
         exit 2
     fi
 } # End-traverse_pci_dev_tree

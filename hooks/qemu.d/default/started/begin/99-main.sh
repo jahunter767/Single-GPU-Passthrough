@@ -13,6 +13,7 @@
 #-----------------------------------------------------------------------------
 function main {
     load_config_data
+    load_description_configs
     echo "started_begin:   Pass"
 } # End-main
 

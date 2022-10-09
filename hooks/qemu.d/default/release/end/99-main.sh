@@ -13,15 +13,16 @@
 #-----------------------------------------------------------------------------
 function main {
     if [ -z "$(command -v "load_config_data")" ]; then
-        echo "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}" 1>&2
+        log "ERROR: load_config_data not defined in ${HOOK_FOLDER}/default.d/${DOMAIN_NAME}"
         exit 2
     fi
 
     load_config_data
-    readarray -t config_flags <<< $(cat "${TMP_CONFIG_PATH}/state/args.val")
-    config_flags=("${config_flags[@]## }")
+    load_description_configs
 
+    local config_flags=(${CONFIG_FLAGS[@]})
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
+        echo "Debugging enabled"
         set -x
     fi
 
@@ -67,12 +68,12 @@ function main {
                 start_display_manager
             ;;
             --enable-internal-services)
-                echo "Removing ${internal_services[*]} services from ${internal_zone} firewall zone"
-                disable_services ${internal_zone} ${internal_services[*]}
+                echo "Disabling Internal Services"
+                disable_internal_services
             ;;
             --enable-external-services)
-                echo "Removing ${external_services[*]} services from ${external_zone} firewall zone"
-                disable_services ${external_zone} ${external_services[*]}
+                echo "Disabling External Services"
+                disable_external_services
             ;;
             --enable-nfs)
                 echo "Unexporting the following NFS shares from the VM:"
@@ -89,10 +90,10 @@ function main {
                 release_cores
             ;;
             --debug)
-                echo "Debugging was enabled"
+                # Pass
             ;;
             *)
-                echo "Warning: Undefined tag: ${f}" 1>&2
+                log "WARNING: Undefined tag: ${f}"
             ;;
         esac
     done

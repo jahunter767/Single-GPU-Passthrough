@@ -10,6 +10,7 @@
 #-----------------------------------------------------------------------------
 function main {
     load_config_data
+    load_description_configs
     echo "stopped_end:     Pass"
 } # End-main
 
