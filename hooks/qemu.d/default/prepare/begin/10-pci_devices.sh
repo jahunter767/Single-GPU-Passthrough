@@ -2,12 +2,33 @@
 
 # Author: Mateus Souza
 function stop_display_manager {
-    local managers=("display-manager" "sddm" "gdm" "lightdm" "lxdm" "xdm" "mdm")
-    for m in $managers; do
-        if systemctl is-active --quiet "$m.service"; then
+    local managers=("sddm" "gdm" "lightdm" "lxdm" "xdm" "mdm")
+    for m in ${managers}; do
+        if $(systemctl is-active --quiet "$m.service"); then
             echo "${m}" > "${TMP_CONFIG_PATH}/state/display-manager.val"
             # systemctl stop "${m}.service"
             echo "${m}.service"
+
+            # Stopping any additional processes/services related to the desktop
+            # environment that may prevent the GPU specific DRM module from
+            # being unloaded or the GPU from being unbound from the module due
+            # to them still using the GPU
+            case "${m}" in
+                gdm)
+                    killall gdm-x-session
+                    ;;
+                sddm)
+                    if $(systemctl --global is-active --quiet "plasma-workspace-wayland.target"); then
+                        # killall plasmashell
+                        killall kwin_wayland
+                    # elif $(systemctl --global is-active --quiet "plasma-workspace-x11.target"); then
+                    #     killall kwin_x11
+                    fi
+                    ;;
+                *)
+                    log "WARNING: Unrecognized display manager"
+                    ;;
+            esac
         fi
     done
 } # End-stop_display_manager
@@ -109,12 +130,30 @@ function unbind_pci_devices {
 } # End-unbind_pci_devices
 
 function unload_drm_kmods {
-    local mod_list="$(get_module_list drm)"
-    local mod_list="${mod_list#drm }"
-    echo "${mod_list}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
-    for m in  ${mod_list}; do
-        # modprobe -r "${m}"
-        echo "modprobe -r ${m}"
+    local gpus=(${@})
+    local pci_dev_state_path="${TMP_CONFIG_PATH}/state/pci-devs"
+    declare -a root_mod_list
+    declare -a mod_list
+    for g in ${gpus}; do
+        local dev_path="/sys/bus/pci/devices/${g}/"
+        local driver="$(basename "$(realpath "${dev_path}/driver")")"
+        local mod="$(basename "$(realpath "${dev_path}/driver/module")")"
+        local temp=($(get_module_list "${mod}"))
+
+        mkdir -p "${pci_dev_state_path}/${g}"
+        echo "${driver}}" > "${pci_dev_state_path}/${g}/driver.val"
+        echo "${temp[@]}" > "${pci_dev_state_path}/${g}/module.val"
+
+        if [[ ! "${root_mod_list[@]} ${mod_list[@]}" =~ "${mod}" ]]; then
+            root_mod_list=(${root_mod_list[@]} "${mod}")
+            mod_list=(${mod_list[@]} ${temp[@]:1})
+        fi
+    done
+
+    echo "${mod_list[@]:1}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+    for (( i = ${#mod_list[@]} - 1; i >= 0 ; i-- )); do
+        # modprobe -r "${mod_list[$[i]]}"
+        echo "modprobe -r ${mod_list[$[i]]}"
     done
 } # End-unload_drm_kmods
 

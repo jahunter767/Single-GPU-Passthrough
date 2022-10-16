@@ -21,12 +21,6 @@ default_user_allowedCPUs=""
 default_system_allowedCPUs=""
 default_init_allowedCPUs=""
 
-# internal_zone=("libvirt")
-# internal_services=("")
-
-# external_services=("")
-# external_zone=("")
-
 nfs_shares=("")
 nfs_user="username"
 nfs_group="username"
@@ -242,16 +236,14 @@ function load_config_data {
 # Functions commonly used across multiple different types of hooks
 ##############################################################################
 
-# Returns a list og GPU's that have ports for display outputs
+# Returns a list of GPU's that have ports for display outputs
 function get_gpu_with_output_list {
-    declare -a renderers
     while read r; do
         # If the renderer has ports for display out
         if [[ -n "$(ls -d ${r}/drm/card*/card*-*)" ]]; then
-            renderers[${#renderers[@]}]="$(basename "$(realpath "${r}")")"
+            echo "$(basename "$(realpath "${r}")")"
         fi
     done <<< "$(ls -d1 /sys/class/drm/render*/device)"
-    echo ${renderers}
 } # End-get_gpu_with_output_list
 
 # Returns a list containing the module passed and all the modules that directly

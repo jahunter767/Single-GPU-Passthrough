@@ -23,12 +23,17 @@ function main {
     # Checks if all the current GPU's with graphical outputs are to be passed
     # to the VM
     local disable_host_graphics=1
-    for r in $(get_gpu_with_output_list); do
+    readarray -t gpu_with_output_list <<< "$(get_gpu_with_output_list)"
+    for r in ${gpu_with_output_list[@]}; do
+        # If one gpu with outputs is not included in the lust of devices to be
+        # passed to the guest then don't disable host graphics
         if [[ ! "${HOSTDEV_LIST_PCI[@]}" =~ "${r}" ]]; then
             local disable_host_graphics=0
         fi
     done
-    if [ ${disable_host_graphics} -eq 1 ]; then
+    if [[ (( ${disable_host_graphics} == 1 )) &&
+          -n "${gpu_with_output_list[@]}" ]];
+    then
         local config_flags=(${config_flags[@]} "--no-host-graphics")
     fi
 
@@ -59,7 +64,7 @@ function main {
                 echo "Unbinding EFI-Framebuffer"
                 unbind_efi_framebuffer
                 echo "Unloading DRM (Direct Rendering Manager) kernel modules"
-                unload_drm_kmods
+                unload_drm_kmods "${gpu_with_output_list[@]}"
             ;;
             --enable-internal-services)
                 echo "Enabling Internal Services"

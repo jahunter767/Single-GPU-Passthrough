@@ -10,21 +10,16 @@ the basics to keep this short.
 1. All the other script improvements scattered around the hook scripts
     (Search "@TODO" to find them).
 2. Handle empty flags
-3. Add support for detecting the network a VM is attached to and its
-    configuration (This eliminates the need to specify the network details in
-    the VM hooks)
-4. Add support for listing services to expose in the description so users don't
-    need to edit the hooks
-5. Add checks for file existence (in the state folder) before trying to read from
+3. Add checks for file existence (in the state folder) before trying to read from
     them
-6. Either:
+4. Either:
    a. update unloading of drm related kernel modules to not rely on the presence
       of the drm module in lsmod output
    b. find another way to identify them from the main drm module/driver
    c. save the gpu drivers to the relevant location in the state folder and
       unload the modules right after (looks the most promising right now)
-7. Add checks to see if requested hardware is in use by another VM
-8. Fix issue with shutting down the desktop environment when using KDE on
+5. Add checks to see if requested hardware is in use by another VM
+6. Fix issue with shutting down the desktop environment when using KDE on
    Wayland (seems like kwayland needs to be killed)
 
 ## Credits

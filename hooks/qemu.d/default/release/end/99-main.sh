@@ -47,12 +47,15 @@ function main {
     # and loading the necessary modules for the drm module as the rendering
     # devices only show up in /sys/class/drm after that
     local enable_host_graphics=1
-    for r in $(get_gpu_with_output_list); do
+    readarray -t gpu_with_output_list <<< "$(get_gpu_with_output_list)"
+    for r in ${gpu_with_output_list[@]}; do
         if [[ ! "${HOSTDEV_LIST_PCI[@]}" =~ "${r}" ]]; then
             enable_host_graphics=0
         fi
     done
-    if [ ${enable_host_graphics} -eq 1 ]; then
+    if [[ (( ${enable_host_graphics} -eq 1 )) &&
+          -n "${gpu_with_output_list[@]}" ]];
+    then
         local config_flags=("--no-host-graphics" "${config_flags[@]}")
     fi
 
