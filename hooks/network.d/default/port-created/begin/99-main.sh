@@ -12,6 +12,11 @@
 
 function main {
     parse_xml
+
+    if (( $DEBUG == 1 )); then
+        set -x
+    fi
+
     echo "port_created_begin: Pass"
 } # End-main
 

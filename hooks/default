@@ -5,10 +5,14 @@ declare -g DOMAIN_NAME
 declare -g GUEST_NAME
 declare -g HOOK_NAME
 declare -g STATE_NAME
-declare -g MISC
+declare -ga MISC
 declare -g HOOK_FOLDER
+declare -g TMP_CONFIG_ROOT_PATH
 declare -g TMP_CONFIG_PATH
 declare -g LOG_FILE
+
+declare -gi DEBUG
+declare -gi DRY_RUN
 
 declare -ga CONFIG_FLAGS
 declare -ga HOST_SERVICES
@@ -18,15 +22,23 @@ DOMAIN_NAME="$(basename "${0}")"
 GUEST_NAME="${1}"
 HOOK_NAME="${2}"
 STATE_NAME="${3}"
-MISC="${@:4}"
+MISC=(${@:4})
 
 HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
-#TMP_CONFIG_PATH_ROOT="/tmp/libvirt-xml"
-TMP_CONFIG_PATH_ROOT="tmp/libvirt-xml"
-TMP_CONFIG_PATH="${TMP_CONFIG_PATH_ROOT}/${DOMAIN_NAME}/${GUEST_NAME}"
-# HOOK_LOG_PATH="/var/log/libvirt/hooks/${DOMAIN_NAME}"
-HOOK_LOG_PATH="var/log/libvirt/hooks/${DOMAIN_NAME}"
+
+if [[ ${MISC[0]} =~ "test" ]]; then
+    TMP_CONFIG_ROOT_PATH="/tmp/libvirt-xml-test"
+    HOOK_LOG_PATH="var/log/libvirt/hooks/${DOMAIN_NAME}"
+else
+    TMP_CONFIG_ROOT_PATH="/tmp/libvirt-xml"
+    HOOK_LOG_PATH="/var/log/libvirt/hooks/${DOMAIN_NAME}"
+fi
+
+TMP_CONFIG_PATH="${TMP_CONFIG_ROOT_PATH}/${DOMAIN_NAME}/${GUEST_NAME}"
 LOG_FILE="${HOOK_LOG_PATH}/${GUEST_NAME}.log"
+
+DEBUG=0
+DRY_RUN=0
 
 mkdir -p "${HOOK_LOG_PATH}"
 
@@ -35,10 +47,28 @@ mkdir -p "${HOOK_LOG_PATH}"
 #-----------------------------------------------------------------------------
 
 function log {
+    (( $DEBUG == 1 )) && set +x
     for line in "${@}"; do
         echo "${line}" 1>&2
     done
+    (( $DEBUG == 1 )) && set -x
 } # End-log
+
+#-----------------------------------------------------------------------------
+# Handles whether to run or print the command based on if the dry-run flag was
+# specified in the description
+#-----------------------------------------------------------------------------
+
+function execute {
+    (( $DEBUG == 1 )) && set +x
+    if (( $DRY_RUN == 0 )); then
+        eval "${1}"
+        return "$?"
+    else
+        echo "${1}"
+    fi
+    (( $DEBUG == 1 )) && set -x
+} # End-execute
 
 #-----------------------------------------------------------------------------
 # Parse XML and create a file system in tmp representing its structure then
@@ -220,6 +250,7 @@ function parse_description_array {
 
 function parse_description_configs {
     local hyphenated_word_regexp="[[:word:]]+(-[[:word:]]+)*"
+
     local arg_regex="(--${hyphenated_word_regexp})"
     parse_description_array "args" "${arg_regex}" 1 > \
         "${TMP_CONFIG_PATH}/state/args.val"
@@ -237,13 +268,16 @@ function parse_description_configs {
 
 function load_description_configs {
     echo "Reading data from the description"
-    readarray -td " " CONFIG_FLAGS <<< $(cat "${TMP_CONFIG_PATH}/state/args.val")
-    CONFIG_FLAGS=(${CONFIG_FLAGS[@]%\n})
+    #declare -a temp_list
+    #declare -i last
 
-    readarray -td " " HOST_SERVICES <<< $(cat "${TMP_CONFIG_PATH}/state/host_services.val")
-    HOST_SERVICES=(${HOST_SERVICES[@]%\n})
+    readarray -td " " CONFIG_FLAGS < "${TMP_CONFIG_PATH}/state/args.val"
+    #CONFIG_FLAGS=(${CONFIG_FLAGS[@]%\n})
 
-    readarray -t INTERNAL_SERVICES <<< $(cat "${TMP_CONFIG_PATH}/state/internal_services.val")
+    readarray -td " " HOST_SERVICES < "${TMP_CONFIG_PATH}/state/host_services.val"
+    #HOST_SERVICES=(${HOST_SERVICES[@]%\n})
+
+    readarray -t INTERNAL_SERVICES < "${TMP_CONFIG_PATH}/state/internal_services.val"
 
     declare -p CONFIG_FLAGS
     declare -p HOST_SERVICES

@@ -5,6 +5,16 @@ declare -g IP_ADDR
 declare -g NET_DOMAIN
 declare -g ZONE
 
+# The XML format for network devices does not have a description tag so this
+# is here to facilitate testing and debugging of networks managed by libvirt
+# See the docs for all the supported tags:
+# https://libvirt.org/formatnetwork.html
+if [[ ${MISC[0]} =~ "test" ]]; then
+    DEBUG=1
+    DRY_RUN=1
+    echo "Debugging and dry-run enabled"
+fi
+
 ##############################################################################
 # Extract device data from tmp folder structure
 ##############################################################################

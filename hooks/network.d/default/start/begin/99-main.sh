@@ -11,6 +11,11 @@ function main {
     if [[ -d "${TMP_CONFIG_PATH}/state" ]]; then
         rm -r "${TMP_CONFIG_PATH}/state"
     fi
+
+    if (( $DEBUG == 1 )); then
+        set -x
+    fi
+
     echo "start_begin:        Pass"
 } # End-main
 

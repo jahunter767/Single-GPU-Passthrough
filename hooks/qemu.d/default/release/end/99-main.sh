@@ -95,6 +95,9 @@ function main {
             --debug)
                 # Pass
             ;;
+            --dry-run)
+                # Pass
+            ;;
             *)
                 log "WARNING: Undefined tag: ${f}"
             ;;

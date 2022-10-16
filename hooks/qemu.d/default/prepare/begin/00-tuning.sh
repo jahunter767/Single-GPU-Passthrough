@@ -39,11 +39,15 @@ function isolate_cores {
         local allowed_system_threads="${allowed_system_threads/ ${c} / }"
         local allowed_init_threads="${allowed_init_threads/ ${c} / }"
     done
+    # shopt -s extglob
+    # local thread_regex="${CPU_THREAD_LIST[@]}"
+    # thread_regex="[ ${thread_regex//[[:space:]]/ \| } ]"
+    # allowed_user_threads="${allowed_user_threads//${thread_regex}/ }"
+    # allowed_system_threads="${allowed_system_threads//${thread_regex}/ }"
+    # allowed_init_threads="${allowed_init_threads//${thread_regex}/ }"
+    # shopt -s extglob
 
-    # systemctl set-property --runtime -- user.slice AllowedCPUs="${allowed_user_threads}"
-    # systemctl set-property --runtime -- system.slice AllowedCPUs="${allowed_system_threads}"
-    # systemctl set-property --runtime -- init.scope AllowedCPUs="${allowed_init_threads}"
-    echo "Free user.slice threads: ${allowed_user_threads}"
-    echo "Free system.slice threads: ${allowed_system_threads}"
-    echo "Free init.slice threads: ${allowed_init_threads}"
+    execute "systemctl set-property --runtime -- user.slice AllowedCPUs=\"${allowed_user_threads}\""
+    execute "systemctl set-property --runtime -- system.slice AllowedCPUs=\"${allowed_system_threads}\""
+    execute "systemctl set-property --runtime -- init.scope AllowedCPUs=\"${allowed_init_threads}\""
 } # End-isolate_cores

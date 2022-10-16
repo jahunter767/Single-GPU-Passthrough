@@ -1,7 +1,7 @@
 <domain type="kvm">
   <name>windows-gpu</name>
   <description>test
-    args[ --pin-cpu-cores   --enable-internal-services --enable-external-services --enable-nfs --debug   ]
+    args[ --dry-run --pin-cpu-cores   --enable-internal-services --enable-external-services --enable-nfs --debug   ]
     &lt;notTag&gt;
     args[ --flag3 --flag4 ]
 

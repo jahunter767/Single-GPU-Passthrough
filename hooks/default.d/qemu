@@ -283,13 +283,11 @@ function detach_pci_dev {
     local driver_path="$(realpath "${dev_path}/driver")"
     #local driver="$(basename "${driver_path}")"
 
-    #echo "${device}" > "${driver_path}/unbind"
-    echo "${device} > ${driver_path}/unbind"
+    execute "echo \"${device}\" > \"${driver_path}/unbind\""
 
     # This prevents autoprobing from automatically reconnecting the device to
     # the current driver
-    #echo "${dev_id}" > "${driver_path}remove_id"
-    #echo "${dev_id} > ${driver_path}remove_id"
+    #execute "echo \"${dev_id}\" > \"${driver_path}remove_id\""
 } # End-detach_pci_dev
 
 function attach_pci_dev {
@@ -300,8 +298,7 @@ function attach_pci_dev {
 
     # Resetting the pci device
     if [[ -e "${dev_path}/reset" ]]; then
-        #echo 1 > "${dev_path}/reset"
-        echo "1 > ${dev_path}/reset"
+        execute "echo 1 > \"${dev_path}/reset\""
     else
         log "Notice: This pci device is not directly resettable. If the VM fails to start," \
             "        try starting it without passing through fails to start, try starting" \
@@ -320,9 +317,10 @@ function attach_pci_dev {
             exit 2
         fi
 
-        #echo "${device}" > "${driver_path}/bind"
-        #local pred="${?}"
-        local pred="$(exit 1)$?"
+        # @TODO: Have the execute function return the result of the eval
+        execute "echo \"${device}\" > \"${driver_path}/bind\""
+        local pred="${?}"
+        #local pred="$(exit 1)$?"
         case "${pred}" in
             0)
                 # The device was previously bound to the driver so proceed with
@@ -333,10 +331,8 @@ function attach_pci_dev {
                 local vendor="$(cat ${dev_path}/vendor)"
                 local device="$(cat ${dev_path}/device)"
                 local dev_id="${vendor#0x} ${device#0x}"
-                #echo "${dev_id}" > "/sys/bus/pci/drivers/${driver}/new_id"
-                echo "${dev_id} > /sys/bus/pci/drivers/${driver}/new_id"
-                #echo "${device}" > "${driver_path}/bind"
-                #echo "${device} > ${driver_path}/bind"
+                execute "echo \"${dev_id}\" > \"/sys/bus/pci/drivers/${driver}/new_id\""
+                #execute "echo \"${device}\" > \"${driver_path}/bind\""
             ;;
             *)
                 log "ERROR: The command below failed with code ${pred}:" \

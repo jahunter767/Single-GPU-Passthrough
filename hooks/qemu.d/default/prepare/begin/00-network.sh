@@ -11,8 +11,8 @@ function enable_services {
 
     echo "Adding '${@:2}' to '${zone}' zone"
     for p in ${@:2}; do
-        # firewall-cmd --add-service=${p} --zone=${zone}
-        echo "--add-service=${p} --zone=${zone}"
+        execute "firewall-cmd --add-service=\"${p}\" --zone=\"${zone}\""
+
     done
 } # End-enable_services
 
@@ -38,7 +38,7 @@ function enable_internal_services {
             case "${type}" in
                 network)
                     local network="${INTERFACE_LIST[$i]##*@}"
-                    local network_config_path="${TMP_CONFIG_PATH_ROOT}/network/${network}/hookData/network"
+                    local network_config_path="${TMP_CONFIG_ROOT_PATH}/network/${network}/hookData/network"
 
                     local zone_path="${network_config_path}/bridge/zone.val"
                     if [[ -s "${zone_path}" ]]; then
@@ -86,15 +86,13 @@ function enable_external_services {
 # Export NFS shares
 function export_nfs_shares {
     for ((i = 0; i < ${#nfs_shares[*]}; i++)); do
-        #exportfs -o rw,sync,secure,all_squash,anonuid=$(id -u ${nfs_user}),anongid=$(id -g ${nfs_group}) ${vm_hostname}:${nfs_shares[i]}
-        echo "exportfs -o rw,sync,secure,all_squash,anonuid=$(id -u ${nfs_user}),anongid=$(id -g ${nfs_group}) ${vm_hostname}:${nfs_shares[i]}"
+        execute "exportfs -o rw,sync,secure,all_squash,anonuid=$(id -u ${nfs_user}),anongid=$(id -g ${nfs_group}) \"${vm_hostname}:${nfs_shares[i]}\""
     done
 } # End-export_nfs_shares
 
 # Enable SMB shares
 function enable_smb_shares {
     for s in  ${smb_shares[@]}; do
-        # chcon -t samba_share_t "${s}"
-        echo "chcon -t samba_share_t ${s}"
+        execute "chcon -t samba_share_t \"${s}\""
     done
 } # End-enable_smb_shares

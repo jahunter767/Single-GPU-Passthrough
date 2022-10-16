@@ -21,6 +21,8 @@ the basics to keep this short.
 5. Add checks to see if requested hardware is in use by another VM
 6. Fix issue with shutting down the desktop environment when using KDE on
    Wayland (seems like kwayland needs to be killed)
+7. Warn users about having virtualized graphics configured when passing through
+    last remaining GPU with an output to a VM
 
 ## Credits
 
@@ -77,15 +79,19 @@ If you want to try the scripts before deploying them you can change the path
 of the tmp config folder and log file from in the
 [hooks/default](hooks/default) script then run:
 
-`./hooks/${domain} ${guest_name} ${hook_name} ${state_name} - < ${test_xml}`
+`./hooks/${domain} ${guest_name} ${hook_name} ${state_name} test < ${test_xml}`
 
 where ${domain} represents one of the 4 main scripts at the root of the hooks
 folder (qemu, network, lxc, daemon) and ${test_xml} is just a libvirt xml file.
 
+NB. The forth argument `test` is not an official arguement. When the scripts
+are run from a libvirt client like virsh or virt-manager this arguement is
+usually a hyphen (`-`).
+
 eg.
-`./hooks/qemu win10-gpu prepare begin - < test-qemu.xml`
-`./hooks/network vm-net started begin - < test-network.xml`
-`./hooks/network vm-net port-created begin - < test-network-port-created.xml`
+`./hooks/qemu win10-gpu prepare begin test < test-qemu.xml`
+`./hooks/network vm-net started begin test < test-network.xml`
+`./hooks/network vm-net port-created begin test < test-network-port-created.xml`
 
 ## Disclaimers
 

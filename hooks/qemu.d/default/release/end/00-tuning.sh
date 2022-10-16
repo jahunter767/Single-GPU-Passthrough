@@ -23,10 +23,7 @@ function release_cores {
         local allowed_init_threads="${allowed_init_threads/ ${c} / }"
     done
 
-    # systemctl set-property --runtime -- user.slice AllowedCPUs="${allowed_user_threads}"
-    # systemctl set-property --runtime -- system.slice AllowedCPUs="${allowed_system_threads}"
-    # systemctl set-property --runtime -- init.scope AllowedCPUs="${allowed_init_threads}"
-    echo "Free user.slice threads: ${allowed_user_threads}"
-    echo "Free system.slice threads: ${allowed_system_threads}"
-    echo "Free init.slice threads: ${allowed_init_threads}"
+    execute "systemctl set-property --runtime -- user.slice AllowedCPUs=\"${allowed_user_threads}\""
+    execute "systemctl set-property --runtime -- system.slice AllowedCPUs=\"${allowed_system_threads}\""
+    execute "systemctl set-property --runtime -- init.scope AllowedCPUs=\"${allowed_init_threads}\""
 } # End-release_cores

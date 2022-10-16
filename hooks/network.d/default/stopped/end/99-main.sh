@@ -8,6 +8,11 @@
 
 function main {
     load_config_data
+
+    if (( $DEBUG == 1 )); then
+        set -x
+    fi
+
     echo "stopped_end:        Pass"
 } # End-main
 

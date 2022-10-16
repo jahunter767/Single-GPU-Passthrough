@@ -48,8 +48,13 @@ function main {
     # @TODO: Explore adding support for GPU passthrough on laptops with Optimius
     #        or Prime
 
+    if [[ "${config_flags[@]}" =~ "--dry-run" ]]; then
+        echo "Dry-run enabled"
+        DRY_RUN=1
+    fi
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
         echo "Debugging enabled"
+        DEBUG=1
         set -x
     fi
 
@@ -89,6 +94,9 @@ function main {
                 isolate_cores
             ;;
             --debug)
+                # Pass
+            ;;
+            --dry-run)
                 # Pass
             ;;
             *)

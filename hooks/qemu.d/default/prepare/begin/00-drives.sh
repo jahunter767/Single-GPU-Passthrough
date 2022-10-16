@@ -20,8 +20,7 @@ function unmount_drives {
                 local mt_pt="$(findmnt -no TARGET /dev/${part})"
                 if [[ -n "${mt_pt}" ]]; then
                     echo "${mt_pt}" > "${TMP_CONFIG_PATH}/state/drives/${part}.val"
-                    # umount "/dev/${part}"
-                    echo "umount /dev/${part}"
+                    execute "umount \"/dev/${part}\""
                 fi
                 # Lock encrypted partition
             ;;
@@ -31,8 +30,7 @@ function unmount_drives {
                 local mt_pt="$(findmnt -no TARGET /dev/${part})"
                 if [[ -n "${mt_pt}" ]]; then
                     echo "${mt_pt}" > "${TMP_CONFIG_PATH}/state/drives/${part}.val"
-                    # umount "/dev/${part}"
-                    echo "umount /dev/${part}"
+                    execute "umount \"/dev/${part}\""
                 fi
             ;;
         esac

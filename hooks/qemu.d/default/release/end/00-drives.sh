@@ -16,8 +16,7 @@ function remount_drives {
         while read bdev_mt_pt; do
             if [[ -n "${bdev_mt_pt}" ]]; then
                 local bdev="$(basename ${bdev_mt_pt})"
-                #mount "/dev/${bdev%\.val}" "$(cat "${bdev_mt_pt}")"
-                echo "mount /dev/${bdev%\.val} $(cat "${bdev_mt_pt}")"
+                execute "mount \"/dev/${bdev%\.val}\" \"$(cat ${bdev_mt_pt})\""
             fi
         done <<< $(ls -d1 ${TMP_CONFIG_PATH}/state/drives/${blk_dev}*.val)
     done

@@ -7,8 +7,7 @@ function unload_vfio {
     #        may currently be using the modules
     #        Potential file to check:
     #        ${TMP_CONFIG_PATH}/state/pci-devs/existing_modules.val
-    #modprobe -r "${VFIO_KMODS[@]}"
-    echo "modprobe -r ${VFIO_KMODS[@]}"
+    execute "modprobe -r \"${VFIO_KMODS[@]}\""
 } # End-unload_vfio
 
 function load_drm_kmods {
@@ -17,8 +16,7 @@ function load_drm_kmods {
     if [[ -f "${file}" && -s "${file}" ]]; then
         local drm_mods="$(cat ${file})"
         for m in ${drm_mods}; do
-            # modprobe "${m}"
-            echo "modprobe ${m}"
+            execute "modprobe \"${m}\""
         done
     fi
 } # End-load_drm_kmods
@@ -51,8 +49,7 @@ function bind_pci_devices {
         then
             local modules="$(cat ${dev_conf_path}/module.val)"
             for m in ${modules}; do
-                # modprobe "${m}"
-                echo "modprobe ${m}"
+                execute "modprobe \"${m}\""
             done
         fi
 
@@ -98,22 +95,19 @@ function bind_pci_devices {
 
 function bind_efi_framebuffer {
     if [[ ! -d "/sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0" ]]; then
-        #echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/bind
-        echo "efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind"
+        execute "echo \"efi-framebuffer.0\" > \"/sys/bus/platform/drivers/efi-framebuffer/bind\""
     fi
 } # End-bind_efi_framebuffer
 
 function bind_vtconsoles {
     for v in /sys/class/vtconsole/vtcon*; do
         if [[ $(cat ${v}/bind) != 1 ]]; then
-            #echo 1 > ${v}/bind
-            echo "1 > ${v}/bind"
+            execute "echo 1 > \"${v}/bind\""
         fi
     done
 } # End-bind_vtconsoles
 
 function start_display_manager {
     # #TODO: Check the display manager's current state before trying to start it
-    # systemctl start "$(cat ${TMP_CONFIG_PATH}/state/display-manager.val).service"
-    echo "$(cat ${TMP_CONFIG_PATH}/state/display-manager.val).service"
+    execute "systemctl start \"$(cat ${TMP_CONFIG_PATH}/state/display-manager.val).service\""
 } # End-start_display_manager

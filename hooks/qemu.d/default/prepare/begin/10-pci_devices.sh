@@ -6,8 +6,7 @@ function stop_display_manager {
     for m in ${managers}; do
         if $(systemctl is-active --quiet "$m.service"); then
             echo "${m}" > "${TMP_CONFIG_PATH}/state/display-manager.val"
-            # systemctl stop "${m}.service"
-            echo "${m}.service"
+            execute "systemctl stop \"${m}.service\""
 
             # Stopping any additional processes/services related to the desktop
             # environment that may prevent the GPU specific DRM module from
@@ -15,14 +14,14 @@ function stop_display_manager {
             # to them still using the GPU
             case "${m}" in
                 gdm)
-                    killall gdm-x-session
+                    execute "killall \"gdm-x-session\""
                     ;;
                 sddm)
                     if $(systemctl --global is-active --quiet "plasma-workspace-wayland.target"); then
-                        # killall plasmashell
-                        killall kwin_wayland
+                        # execute "killall \"plasmashell\""
+                        execute "killall \"kwin_wayland\""
                     # elif $(systemctl --global is-active --quiet "plasma-workspace-x11.target"); then
-                    #     killall kwin_x11
+                    #     execute "killall \"kwin_x11\""
                     fi
                     ;;
                 *)
@@ -36,16 +35,14 @@ function stop_display_manager {
 function unbind_vtconsoles {
     for v in /sys/class/vtconsole/vtcon*; do
         if [[ $(cat ${v}/bind) != 0 ]]; then
-            #echo 0 > ${v}/bind
-            echo "0 > ${v}/bind"
+            execute "echo 0 > \"${v}/bind\""
         fi
     done
 } # End-unbind_vtconsoles
 
 function unbind_efi_framebuffer {
     if [[ -d "/sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0" ]]; then
-        #echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/unbind
-        echo "efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind"
+        execute "echo \"efi-framebuffer.0\" > \"/sys/bus/platform/drivers/efi-framebuffer/unbind\""
 
         # Avoid a Race condition by waiting 2 seconds. This can be calibrated
         # to be shorter or longer if required for your system
@@ -152,8 +149,7 @@ function unload_drm_kmods {
 
     echo "${mod_list[@]:1}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
     for (( i = ${#mod_list[@]} - 1; i >= 0 ; i-- )); do
-        # modprobe -r "${mod_list[$[i]]}"
-        echo "modprobe -r ${mod_list[$[i]]}"
+        execute "modprobe -r \"${mod_list[$[i]]}\""
     done
 } # End-unload_drm_kmods
 
@@ -163,7 +159,6 @@ function load_vfio {
     #        If they are to be stored, the best place might be
     #        ${TMP_CONFIG_PATH}/state/pci-devs/existing_modules.val
     for v in ${VFIO_KMODS[@]}; do
-        # modprobe ${v}
-        echo ${v}
+        execute "modprobe \"${v}\""
     done
 } # End-load_vfio
