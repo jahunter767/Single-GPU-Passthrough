@@ -17,4 +17,5 @@ function stopped_end {
     execute "systemctl stop nfs-server.service sshd.service smb.service nmb.service"
     execute "setsebool samba_enable_home_dirs off"
     #execute "setsebool samba_export_all_rw off"
+    execute "setsebool nis_enabled off"
 } # End-stopped_end

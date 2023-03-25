@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Setting additional shell options
+
+set -o posix
+
 # Declaring global variables
 declare -g DOMAIN_NAME
 declare -g GUEST_NAME
@@ -26,7 +30,7 @@ MISC=(${@:4})
 
 HOOK_FOLDER="${0%/${DOMAIN_NAME}}"
 
-if [[ ${MISC[0]} =~ "test" ]]; then
+if [[ "${MISC[0]}" =~ "test" ]]; then
     TMP_CONFIG_ROOT_PATH="/tmp/libvirt-xml-test"
     HOOK_LOG_PATH="var/log/libvirt/hooks/${DOMAIN_NAME}"
 else
@@ -47,7 +51,10 @@ mkdir -p "${HOOK_LOG_PATH}"
 #-----------------------------------------------------------------------------
 
 function log {
-    (( $DEBUG == 1 )) && set +x
+    # Turn off debug mode before running to reduce the amount of lines
+    # generated in the log file as this isn't core logic.
+    set +x
+
     for line in "${@}"; do
         echo "${line}" 1>&2
     done
@@ -60,15 +67,101 @@ function log {
 #-----------------------------------------------------------------------------
 
 function execute {
-    (( $DEBUG == 1 )) && set +x
+    # Turn off debug mode before running to reduce the amount of lines
+    # generated in the log file as this isn't core logic.
+    set +x
+
+    declare -i status
     if (( $DRY_RUN == 0 )); then
         eval "${1}"
-        return "$?"
+        status=$?
     else
         echo "${1}"
+        status=$?
     fi
     (( $DEBUG == 1 )) && set -x
+    return ${status}
 } # End-execute
+
+#-----------------------------------------------------------------------------
+# Handles saving data to a file in the config folder. It does not overwrite
+# existing data or append new data
+# /dev/stdin - data to save to the file
+# $1 - relative path to the file to be written to
+#-----------------------------------------------------------------------------
+
+function save {
+    # Turn off debug mode before running to reduce the amount of lines
+    # generated in the log file as this isn't core logic.
+    set +x
+
+    relative_path="${1%/}"
+    full_path="${TMP_CONFIG_PATH}/${relative_path}"
+    # If the file does not already exist then create it and write to it
+    if [[ ! -a "${full_path}" ]]; then
+        mkdir -p "$(dirname  "${full_path}")"
+        tee < /dev/stdin > "${full_path}"
+    fi
+
+    (( $DEBUG == 1 )) && set -x
+} # End-save
+
+#-----------------------------------------------------------------------------
+# Handles saving data to a file in the config folder. It overwrites existing
+# data
+# /dev/stdin - data to save to the file
+# $1 - relative path to the file to be written to
+#-----------------------------------------------------------------------------
+
+function save_as {
+    # Turn off debug mode before running to reduce the amount of lines
+    # generated in the log file as this isn't core logic.
+    set +x
+
+    relative_path="${1%/}"
+    full_path="${TMP_CONFIG_PATH}/${relative_path}"
+    mkdir -p "$(dirname  "${full_path}")"
+    tee < /dev/stdin > "${full_path}"
+
+    (( $DEBUG == 1 )) && set -x
+} # End-save_as
+
+#-----------------------------------------------------------------------------
+# Handles saving data to a file in the config folder. It appends data
+# /dev/stdin - data to save to the file
+# $1 - relative path to the file to be written to
+#-----------------------------------------------------------------------------
+
+function save_append {
+    # Turn off debug mode before running to reduce the amount of lines
+    # generated in the log file as this isn't core logic.
+    set +x
+
+    relative_path="${1%/}"
+    full_path="${TMP_CONFIG_PATH}/${relative_path}"
+    mkdir -p "$(dirname  "${full_path}")"
+    tee < /dev/stdin >> "${full_path}"
+
+    (( $DEBUG == 1 )) && set -x
+} # End-save_append
+
+# #-----------------------------------------------------------------------------
+# # Handles loading data from a file in the config folder.
+# # $1 - relative path to the file to read from
+# #-----------------------------------------------------------------------------
+
+# function load {
+#     # Turn off debug mode before running to reduce the amount of lines
+#     # generated in the log file as this isn't core logic.
+#     set +x
+
+#     relative_path="${1%/}"
+#     full_path="${TMP_CONFIG_PATH}/${relative_path}"
+#     # @TODO: Throw a fatal error if file is not found
+#     cat "${full_path}"
+
+#     (( $DEBUG == 1 )) && set -x
+# } # End-load
 
 #-----------------------------------------------------------------------------
 # Parse XML and create a file system in tmp representing its structure then
@@ -252,16 +345,22 @@ function parse_description_configs {
     local hyphenated_word_regexp="[[:word:]]+(-[[:word:]]+)*"
 
     local arg_regex="(--${hyphenated_word_regexp})"
-    parse_description_array "args" "${arg_regex}" 1 > \
-        "${TMP_CONFIG_PATH}/state/args.val"
+    #parse_description_array "args" "${arg_regex}" 1 > \
+    #    "${TMP_CONFIG_PATH}/state/args.val"
+    parse_description_array "args" "${arg_regex}" 1 |
+        save "state/args.val"
 
     local host_service_regex="(${hyphenated_word_regexp}:${hyphenated_word_regexp}(,${hyphenated_word_regexp})*)"
-    parse_description_array "host_services" "${host_service_regex}" 1 > \
-        "${TMP_CONFIG_PATH}/state/host_services.val"
+    #parse_description_array "host_services" "${host_service_regex}" 1 > \
+    #    "${TMP_CONFIG_PATH}/state/host_services.val"
+    parse_description_array "host_services" "${host_service_regex}" 1 |
+        save "state/host_services.val"
 
     local service_regex="(${hyphenated_word_regexp})"
-    parse_description_array "internal_services" "${service_regex}" > \
-        "${TMP_CONFIG_PATH}/state/internal_services.val"
+    #parse_description_array "internal_services" "${service_regex}" > \
+    #    "${TMP_CONFIG_PATH}/state/internal_services.val"
+    parse_description_array "internal_services" "${service_regex}" |
+        save "state/internal_services.val"
 
     load_description_configs
 } # End-parse_description_configs
@@ -272,12 +371,15 @@ function load_description_configs {
     #declare -i last
 
     readarray -td " " CONFIG_FLAGS < "${TMP_CONFIG_PATH}/state/args.val"
+    #readarray -td " " CONFIG_FLAGS <<< "$(load state/args.val)"
     #CONFIG_FLAGS=(${CONFIG_FLAGS[@]%\n})
 
     readarray -td " " HOST_SERVICES < "${TMP_CONFIG_PATH}/state/host_services.val"
+    #readarray -td " " HOST_SERVICES <<< "$(load state/host_services.val)"
     #HOST_SERVICES=(${HOST_SERVICES[@]%\n})
 
     readarray -t INTERNAL_SERVICES < "${TMP_CONFIG_PATH}/state/internal_services.val"
+    #readarray -t INTERNAL_SERVICES <<< "$(load state/internal_services.val)"
 
     declare -p CONFIG_FLAGS
     declare -p HOST_SERVICES

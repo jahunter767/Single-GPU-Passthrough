@@ -12,7 +12,6 @@ function enable_services {
     echo "Adding '${@:2}' to '${zone}' zone"
     for p in ${@:2}; do
         execute "firewall-cmd --add-service=\"${p}\" --zone=\"${zone}\""
-
     done
 } # End-enable_services
 

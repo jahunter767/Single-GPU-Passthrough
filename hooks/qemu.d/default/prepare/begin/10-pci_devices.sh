@@ -17,12 +17,9 @@ function stop_display_manager {
                     execute "killall \"gdm-x-session\""
                     ;;
                 sddm)
-                    if $(systemctl --global is-active --quiet "plasma-workspace-wayland.target"); then
-                        # execute "killall \"plasmashell\""
-                        execute "killall \"kwin_wayland\""
-                    # elif $(systemctl --global is-active --quiet "plasma-workspace-x11.target"); then
-                    #     execute "killall \"kwin_x11\""
-                    fi
+                    #execute "killall \"plasmashell\""
+                    execute "killall \"kwin_wayland\""
+                    #execute "killall \"kwin_x11\""
                     ;;
                 *)
                     log "WARNING: Unrecognized display manager"
@@ -132,7 +129,7 @@ function unload_drm_kmods {
     declare -a root_mod_list
     declare -a mod_list
     for g in ${gpus}; do
-        local dev_path="/sys/bus/pci/devices/${g}/"
+        local dev_path="/sys/bus/pci/devices/${g}"
         local driver="$(basename "$(realpath "${dev_path}/driver")")"
         local mod="$(basename "$(realpath "${dev_path}/driver/module")")"
         local temp=($(get_module_list "${mod}"))
@@ -147,7 +144,7 @@ function unload_drm_kmods {
         fi
     done
 
-    echo "${mod_list[@]:1}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+    echo "${mod_list[@]}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
     for (( i = ${#mod_list[@]} - 1; i >= 0 ; i-- )); do
         execute "modprobe -r \"${mod_list[$[i]]}\""
     done

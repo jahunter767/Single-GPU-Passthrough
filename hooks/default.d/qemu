@@ -317,7 +317,6 @@ function attach_pci_dev {
             exit 2
         fi
 
-        # @TODO: Have the execute function return the result of the eval
         execute "echo \"${device}\" > \"${driver_path}/bind\""
         local pred="${?}"
         #local pred="$(exit 1)$?"

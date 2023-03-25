@@ -62,6 +62,9 @@ function main {
     for f in ${config_flags[@]}; do
         case ${f} in
             --no-host-graphics)
+                # @TODO: Save the drm modules before stopping the display
+                # manager because killing kwin_wayland seems to unload the
+                # driver breaking unload_drm_kmods in the process
                 echo "Stopping Display Manager"
                 stop_display_manager
                 echo "Unbinding VTconsoles"

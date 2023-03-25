@@ -14,7 +14,8 @@ function started_begin {
     # <your code here>
     main
     # <your code here>
-    execute "systemctl start nfs-server.service sshd.service smb.service nmb.service"
     execute "setsebool samba_enable_home_dirs on"
     #execute "setsebool samba_export_all_rw on"
+    execute "setsebool nis_enabled on"
+    execute "systemctl start nfs-server.service sshd.service smb.service nmb.service"
 } # End-started_begin

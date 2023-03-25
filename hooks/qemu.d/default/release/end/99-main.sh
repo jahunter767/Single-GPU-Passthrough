@@ -21,8 +21,13 @@ function main {
     load_description_configs
 
     local config_flags=(${CONFIG_FLAGS[@]})
+    if [[ "${config_flags[@]}" =~ "--dry-run" ]]; then
+        echo "Dry-run enabled"
+        DRY_RUN=1
+    fi
     if [[ "${config_flags[@]}" =~ "--debug" ]]; then
         echo "Debugging enabled"
+        DEBUG=1
         set -x
     fi
 
