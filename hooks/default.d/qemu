@@ -255,7 +255,8 @@ function get_module_list {
     function traverse_mod_tree {
         declare -a used_by
         local mods="$(lsmod |
-            grep -oP "${1}[[:space:]]+[[:digit:]]+[[:space:]]+[[:digit:]]+[[:space:]]+[[:word:]-_,]+")"
+            grep -oP "${1}[[:space:]]+[[:digit:]]+[[:space:]]+[[:digit:]]+[[:space:]]+[[:word:]_,-]+" |
+            grep -oPm1 "([[:word:]_-]+[,]?)+$")"
         local mods="${mods##* }"
         for m in $(echo "${mods}" | grep -oPm1 "[^,]+"); do
             if [[ -n "${m}" && (! " ${mod_lst[@]} " =~ " ${m} ") ]]; then

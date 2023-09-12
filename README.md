@@ -8,7 +8,7 @@ the basics to keep this short.
 ## TODO
 
 1. All the other script improvements scattered around the hook scripts
-    (Search "@TODO" to find them).
+   (Search "@TODO" to find them).
 2. Handle empty flags
 3. Add checks for file existence (in the state folder) before trying to read from
     them
@@ -20,9 +20,17 @@ the basics to keep this short.
       unload the modules right after (looks the most promising right now)
 5. Add checks to see if requested hardware is in use by another VM
 6. Fix issue with shutting down the desktop environment when using KDE on
-   Wayland (seems like kwayland needs to be killed)
+   Wayland. (The scripts fail to unload the modules for the GPU even after
+   killing Wayland. The scripts will hang trying to reset and bind the GPU to
+   the vfio module until you manually log into the system and unload the kernel
+   modules for the GPU)
 7. Warn users about having virtualized graphics configured when passing through
     last remaining GPU with an output to a VM
+8. Update networking scripts to handle xml configs missing zone and domain info
+9. Add checks for all echo commands that write to a file to ensure they write
+   to the expected location before executing
+> [! Hint]
+> An example of this occurs when trying to unbind a device without any drivers
 
 ## Credits
 
@@ -293,10 +301,12 @@ for other PCIe devices as well).
     hardware that require extra drivers to facilitate rebinding them to the
     host OS after stopping the VM
 
- - Updating your BIOS may change the pci addresses for each device causing the
-    VM to fail to start. Updating the BIOS may also break passthrough support
-    if the BIOS is buggy so it is recommended that you refrain from updating
-    your BIOS unless absolutely necessary
+ - Updating your BIOS or installing/removing and PCIe devices may change the
+    pci addresses for each device causing the VM to fail to start.
+
+ - Updating the BIOS may also break passthrough support if the BIOS is buggy
+    so it is recommended that you refrain from updating your BIOS unless
+    absolutely necessary
 
  - Most scripts simply unload the kernel modules for the PCI device (eg. a GPU)
     when unbinding it, however for those with multiple devices that use the

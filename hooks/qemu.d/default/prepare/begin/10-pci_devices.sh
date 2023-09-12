@@ -8,23 +8,32 @@ function stop_display_manager {
             echo "${m}" > "${TMP_CONFIG_PATH}/state/display-manager.val"
             execute "systemctl stop \"${m}.service\""
 
+            # Wait until the service is stopped
+            # while $(systemctl is-active --quiet "$m.service"); do
+            #     sleep 1
+            # done
+
             # Stopping any additional processes/services related to the desktop
             # environment that may prevent the GPU specific DRM module from
             # being unloaded or the GPU from being unbound from the module due
             # to them still using the GPU
+            local supporting_processes=()
             case "${m}" in
                 gdm)
-                    execute "killall \"gdm-x-session\""
+                    supporting_processes=("gdm-x-session")
                     ;;
                 sddm)
-                    #execute "killall \"plasmashell\""
-                    execute "killall \"kwin_wayland\""
-                    #execute "killall \"kwin_x11\""
+                    supporting_processes=("plasmashell" "kwin_wayland" "kwin_x11")
                     ;;
                 *)
                     log "WARNING: Unrecognized display manager"
                     ;;
             esac
+            for p in ${supporting_processes[@]}; do
+                if [[ -n "$(pgrep ${p})" ]]; then
+                    execute "killall --wait \"${p}\""
+                fi
+            done
         fi
     done
 } # End-stop_display_manager
@@ -144,10 +153,21 @@ function unload_drm_kmods {
         fi
     done
 
-    echo "${mod_list[@]}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
-    for (( i = ${#mod_list[@]} - 1; i >= 0 ; i-- )); do
-        execute "modprobe -r \"${mod_list[$[i]]}\""
-    done
+    # @TODO: Fix edge case where one may be passing through the last 2 gpu's
+    #        where one doesn't have known modules resulting in it being ignored
+    local known_drm_modules_regexp="amdgpu|nvidia[-_]drm"
+    local drm_lst="$(grep -oP "${known_drm_modules_regexp}" <<< "${mod_list[@]}")"
+    if [[ -n "${drm_lst}" ]]; then
+        echo "${drm_lst}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+        for d in ${drm_lst}; do
+            execute "modprobe -r -w 2000 \"${d}\""
+        done
+    else
+        echo "${mod_list[@]}" > "${TMP_CONFIG_PATH}/state/pci-devs/drm-mods.val"
+        for (( i = ${#mod_list[@]} - 1; i >= 0 ; i-- )); do
+            execute "modprobe -r -w 2000 \"${mod_list[$[i]]}\""
+        done
+    fi
 } # End-unload_drm_kmods
 
 function load_vfio {
